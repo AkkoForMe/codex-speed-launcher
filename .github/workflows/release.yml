@@ -1,0 +1,66 @@
+name: Build release draft
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.22.2
+      - name: Check release tag
+        shell: pwsh
+        run: |
+          $version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw 'Release tag does not match package.json'
+          }
+      - run: node --test
+      - name: Build portable packages and source
+        run: node scripts/package.mjs --target all --source
+      - name: Build standalone Windows executable
+        run: node scripts/build-executable.mjs
+      - name: Checksums for all downloadable files
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem -LiteralPath dist -File |
+            Where-Object Name -ne 'SHA256SUMS.txt' |
+            Sort-Object Name |
+            ForEach-Object {
+              $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              "$hash  $($_.Name)"
+            }
+          [IO.File]::WriteAllText((Join-Path $PWD 'dist/SHA256SUMS.txt'), ($lines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-files
+          path: dist/*
+          if-no-files-found: error
+
+  draft:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-files
+          path: release-files
+      - name: Create draft with downloadable assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" release-files/* --verify-tag --draft --generate-notes --title "$RELEASE_TAG"
