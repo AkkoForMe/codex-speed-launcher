@@ -4,7 +4,7 @@
 
 项目采用 MIT 许可证，源码不依赖 Sub2API。启动器在本次运行中适配客户端；退出后可恢复官方快捷方式启动。
 
-[下载最新版本](https://github.com/AkkoForMe/codex-speed-launcher/releases/latest) · [问题反馈](https://github.com/AkkoForMe/codex-speed-launcher/issues)
+[下载发行版](https://github.com/AkkoForMe/codex-speed-launcher/releases) · [问题反馈](https://github.com/AkkoForMe/codex-speed-launcher/issues)
 
 ## 当前验证范围
 

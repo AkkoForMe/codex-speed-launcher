@@ -64,7 +64,7 @@ test('TAR.gz extracts only the requested regular-file member', () => {
 
 test('source allowlist excludes local configs, logs, caches and unrelated projects', async t => {
   const root = await fixture(t);
-  const allowed = ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'package.json', '.gitignore',
+  const allowed = ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'package.json', '.gitignore', '.gitattributes',
     '.github/workflows/ci.yml', '.github/ISSUE_TEMPLATE/bug_report.md', 'src/cli.mjs', 'docs/readme.md',
     'scripts/package.mjs', 'test/package.test.mjs', 'launch-windows.cmd', 'inspect-windows.cmd',
     'launch-macos.command', 'inspect-macos.command'];
