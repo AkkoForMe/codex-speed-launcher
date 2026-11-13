@@ -1,6 +1,6 @@
-# Windows 简约小窗
+# 简约小窗
 
-小窗显示 Codex 版本、兼容性检查结果和配置文件中的模型名称，提供启动、重启、刷新和退出按钮。界面使用 Windows 自带的 WPF，不依赖浏览器、远程页面或额外桌面运行时。
+小窗显示 Codex 版本、兼容性检查结果和配置文件中的模型名称，提供启动、重启、刷新和退出按钮。Windows 使用系统 WPF，Mac 使用系统 AppKit；不依赖浏览器、远程页面或额外桌面运行时。Mac 的下载、首次打开和验证范围见 [Mac 简约小窗](macos-window.md)。
 
 ## 启动与切换速度
 
@@ -23,14 +23,14 @@
 
 ## 命令行
 
-源码或便携包可使用以下命令打开小窗：
+Windows 源码或便携包可使用以下命令打开小窗：
 
 ```console
 node src/cli.mjs gui
 node src/cli.mjs window
 ```
 
-`inspect`、`launch`、`verify` 继续保留。`launch` 使用原有控制台会话生命周期；小窗目前只支持 Windows，macOS 继续使用原有入口。
+`inspect`、`launch`、`verify` 继续保留。`launch` 使用原有控制台会话生命周期；Mac 小窗推荐直接打开发布的 `.app`，源码调用 `gui` 需要先编译对应原生程序。
 
 ## 本地验证范围
 

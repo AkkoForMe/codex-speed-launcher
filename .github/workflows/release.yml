@@ -73,6 +73,7 @@ jobs:
           name: release-files
           path: release-files
       - name: Verify the actual downloadable macOS package
+        timeout-minutes: 3
         env:
           PACKAGE_ARCH: ${{ matrix.arch }}
         shell: bash
@@ -98,7 +99,24 @@ jobs:
             printf '%s\n' "$output"
             grep -F "Codex Speed Launcher $version" <<< "$output"
           done
+      - name: Compile and sign the native macOS app
+        timeout-minutes: 6
+        env:
+          PACKAGE_ARCH: ${{ matrix.arch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "JSON.parse(require('fs').readFileSync('package.json')).version")"
+          package="$RUNNER_TEMP/portable package with spaces/codex-speed-launcher-$version-darwin-$PACKAGE_ARCH"
           node scripts/build-macos-app.mjs --package-dir "$package" --arch "$PACKAGE_ARCH" --out app-files --work "$RUNNER_TEMP/macos-app-build"
+      - name: Verify the final app and its native window
+        timeout-minutes: 2
+        env:
+          PACKAGE_ARCH: ${{ matrix.arch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "JSON.parse(require('fs').readFileSync('package.json')).version")"
           mkdir -p "$RUNNER_TEMP/final app with spaces"
           ditto -x -k "app-files/codex-speed-launcher-$version-darwin-$PACKAGE_ARCH-app.zip" "$RUNNER_TEMP/final app with spaces"
           app="$RUNNER_TEMP/final app with spaces/Codex Speed Launcher.app"
@@ -110,6 +128,7 @@ jobs:
           "$app/Contents/MacOS/CodexSpeedLauncher" --self-test "$PWD/validation/report.json"
           node -e 'const r=require("./validation/report.json"); if(r.ok!==true) process.exit(1); console.log(JSON.stringify(r))'
           test -s validation/window.png
+          test -s validation/window-long-detail.png
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: macos-app-${{ matrix.arch }}

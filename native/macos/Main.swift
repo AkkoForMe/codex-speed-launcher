@@ -17,6 +17,43 @@ struct LauncherState: Decodable {
     let selfTestStats: TestStats?
 }
 
+// Diagnostics exist only for the explicit credential-free native self-test.
+// A background watchdog also covers AppKit startup before its run loop starts.
+final class SelfTestProgress {
+    let report: URL
+    private let lock = NSLock()
+    private var finished = false
+    private var phase = "native-main"
+    init(report: URL) {
+        self.report = report
+        mark("native-main")
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 35) { [self] in
+            lock.lock(); let done = finished; let stage = phase; lock.unlock()
+            guard !done else { return }
+            let result: [String: Any] = ["ok": false, "mockOnly": true, "phase": stage,
+                "error": "Native self-test watchdog timed out.", "realCodexStarted": false, "realApiRequests": 0]
+            if let bytes = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
+                try? bytes.write(to: report)
+            }
+            fputs("Native self-test timed out at: \(stage)\n", stderr)
+            exit(1)
+        }
+    }
+    func mark(_ value: String) {
+        lock.lock(); phase = value; lock.unlock()
+        let line = "\(Date().timeIntervalSince1970) \(value)\n"
+        fputs(line, stderr)
+        try? FileManager.default.createDirectory(at: report.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let file = report.deletingLastPathComponent().appendingPathComponent("progress.log")
+        if !FileManager.default.fileExists(atPath: file.path) { FileManager.default.createFile(atPath: file.path, contents: nil) }
+        if let handle = try? FileHandle(forWritingTo: file) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd(); try? handle.write(contentsOf: Data(line.utf8))
+        }
+    }
+    func finish() { lock.lock(); finished = true; lock.unlock() }
+}
+
 // AppKit owns the visible application. Node is a private child providing the
 // same controller, ownership checks and authenticated bridge as Windows.
 final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
@@ -25,6 +62,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let version = NSTextField(labelWithString: "—")
     let model = NSTextField(labelWithString: "未读取")
     let detail = NSTextField(wrappingLabelWithString: "")
+    let footer = NSTextField(labelWithString: "Standard / Fast · 保留现有连接与模型")
     let dot = NSView()
     let primary = NSButton(title: "启动 Codex", target: nil, action: nil)
     let refresh = NSButton(title: "刷新状态", target: nil, action: nil)
@@ -44,10 +82,12 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var allowTermination = false
     var confirmationOverride: Bool?
     let selfTestReport: URL?
+    let testProgress: SelfTestProgress?
     let launcherRoot: URL
     var testStep = 0
     var testChecks: [String] = []
     var testComplete = false
+    var testLayout: [String: Double] = [:]
     let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 3
@@ -56,7 +96,9 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return URLSession(configuration: config)
     }()
 
-    init(root: URL, report: URL?) { launcherRoot = root; selfTestReport = report; super.init() }
+    init(root: URL, report: URL?, progress: SelfTestProgress?) {
+        launcherRoot = root; selfTestReport = report; testProgress = progress; super.init()
+    }
 
     func label(_ text: String, size: CGFloat = 12, color: NSColor = .secondaryLabelColor) -> NSTextField {
         let result = NSTextField(labelWithString: text)
@@ -66,6 +108,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        testProgress?.mark("applicationDidFinishLaunching")
         makeWindow()
         startBackend()
         if selfTestReport != nil {
@@ -77,6 +120,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func makeWindow() {
+        testProgress?.mark("makeWindow.begin")
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 426, height: 486),
                           styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "Codex Speed Launcher"
@@ -84,6 +128,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.delegate = self
         window.backgroundColor = NSColor(calibratedRed: 0.96, green: 0.965, blue: 0.974, alpha: 1)
         window.appearance = NSAppearance(named: .aqua)
+        testProgress?.mark("makeWindow.created")
         let content = window.contentView!
         let stack = NSStackView()
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 16
@@ -142,7 +187,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         detail.maximumNumberOfLines = 5
         detail.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.addArrangedSubview(detail)
-        let footer = label("Standard / Fast · 保留现有连接与模型", size: 10)
+        footer.font = .systemFont(ofSize: 10); footer.textColor = .secondaryLabelColor
         footer.alignment = .center; footer.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(footer)
         NSLayoutConstraint.activate([
             footer.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
@@ -152,10 +197,15 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let menu = NSMenu(); let menuItem = NSMenuItem(); let appMenu = NSMenu()
         appMenu.addItem(withTitle: "退出 Codex Speed Launcher", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menuItem.submenu = appMenu; menu.addItem(menuItem); NSApp.mainMenu = menu
-        window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        testProgress?.mark("makeWindow.before-show")
+        window.center(); window.makeKeyAndOrderFront(nil)
+        testProgress?.mark("makeWindow.before-activate")
+        NSApp.activate(ignoringOtherApps: true)
+        testProgress?.mark("makeWindow.complete")
     }
 
     func startBackend() {
+        testProgress?.mark("startBackend.begin")
         let node = launcherRoot.appendingPathComponent("runtime/node")
         let script = launcherRoot.appendingPathComponent("src/gui-macos-backend.mjs")
         guard FileManager.default.isExecutableFile(atPath: node.path), FileManager.default.fileExists(atPath: script.path) else {
@@ -182,7 +232,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if self.finishing { self.exitNow() }
             else { self.showFailure("启动器后台已退出。请先保存工作并退出本次 Codex，再重新打开启动器。") }
         } }
-        do { try process.run() }
+        do { try process.run(); testProgress?.mark("startBackend.running") }
         catch { showFailure("无法启动内置运行时。请重新下载与本机芯片匹配的完整应用包。") }
     }
 
@@ -200,6 +250,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 showFailure("启动器后台握手失败。"); return
             }
             bridge = url; credential = "Bearer " + hello.token; helloBuffer.removeAll(keepingCapacity: false)
+            testProgress?.mark("private-handshake-received")
             privateOutput?.fileHandleForReading.readabilityHandler = nil
             poll()
             timer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { [weak self] _ in self?.poll() }
@@ -298,7 +349,8 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     func beginFinish() {
         guard !finishing else { return }; finishing = true; timer?.invalidate()
-        parentInput?.fileHandleForWriting.closeFile()
+        testProgress?.mark("beginFinish")
+        try? parentInput?.fileHandleForWriting.close()
         if backend?.isRunning != true { exitNow() }
         else {
             DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
@@ -309,11 +361,12 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
     }
-    func exitNow() { allowTermination = true; NSApp.terminate(nil) }
+    func exitNow() { testProgress?.mark("exitNow"); allowTermination = true; NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification: Notification) {
         timer?.invalidate(); privateOutput?.fileHandleForReading.readabilityHandler = nil
-        parentInput?.fileHandleForWriting.closeFile()
+        try? parentInput?.fileHandleForWriting.close()
         session.invalidateAndCancel()
+        testProgress?.finish()
     }
 
     func advanceTest(_ value: LauncherState) {
@@ -321,39 +374,61 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if stats.forcedStops != 0 { failTest("Unexpected forced process cleanup."); return }
         switch testStep {
         case 0 where stats.inspections == 1:
+            testProgress?.mark("test.ready")
             guard primary.isEnabled, refresh.isEnabled, value.model == "gpt-6.1-sol", version.stringValue == "Mock 1.0", window.isVisible else { failTest("Native ready state did not render."); return }
             testChecks.append("ready-state-and-window-visible"); testStep = 1; refresh.performClick(nil)
         case 1 where stats.inspections >= 2:
+            testProgress?.mark("test.refresh")
             testChecks.append("refresh-button-read-only"); testStep = 2; primary.performClick(nil)
         case 2 where value.managed && stats.launches == 1:
+            testProgress?.mark("test.cancel-and-restart")
             confirmationOverride = false; primary.performClick(nil)
             let cancelledClose = !windowShouldClose(window)
             guard cancelledClose, !actionPending, window.isVisible else { failTest("Cancelled native close sent an action."); return }
             testChecks.append("cancel-restart-and-close-retains-session"); testStep = 3
             confirmationOverride = true; primary.performClick(nil)
         case 3 where value.phase == "error" && stats.closes == 1:
+            testProgress?.mark("test.graceful-timeout")
             guard value.managed, window.isVisible, primary.isEnabled, quit.isEnabled, stats.launches == 1 else { failTest("Quit timeout did not retain the native window and session."); return }
             testChecks.append("graceful-timeout-keeps-window-and-session"); testStep = 4; primary.performClick(nil)
         case 4 where value.managed && stats.launches == 2 && stats.closes == 2:
+            testProgress?.mark("test.restart-recovered")
             testChecks.append("restart-retry-starts-new-owned-session")
-            do { try screenshot() } catch { failTest("Could not capture the native window."); return }
+            do {
+                try screenshot()
+                let original = detail.stringValue
+                detail.stringValue = String(repeating: "兼容性检查提示：请先保存任务并正常退出 Codex，再刷新状态。", count: 20)
+                window.contentView?.layoutSubtreeIfNeeded()
+                let content = window.contentView!
+                let detailBounds = detail.convert(detail.bounds, to: content)
+                let footerBounds = footer.convert(footer.bounds, to: content)
+                let gap = detailBounds.minY - footerBounds.maxY
+                testLayout = ["detailHeight": detailBounds.height, "detailBottom": detailBounds.minY,
+                              "footerTop": footerBounds.maxY, "gap": gap]
+                try screenshot(name: "window-long-detail.png")
+                detail.stringValue = original
+                window.contentView?.layoutSubtreeIfNeeded()
+                guard gap >= 8 else { failTest("Long detail overlaps the native window footer."); return }
+                testChecks.append("long-detail-does-not-overlap-footer")
+            } catch { failTest("Could not capture the native window."); return }
             testStep = 5; quit.performClick(nil)
         default: break
         }
     }
-    func screenshot() throws {
+    func screenshot(name: String = "window.png") throws {
         guard let report = selfTestReport, let content = window.contentView else { return }
         content.layoutSubtreeIfNeeded(); content.displayIfNeeded()
         guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { throw NSError(domain: "NativeWindow", code: 1) }
         content.cacheDisplay(in: content.bounds, to: bitmap)
         guard let png = bitmap.representation(using: .png, properties: [:]) else { throw NSError(domain: "NativeWindow", code: 2) }
         try FileManager.default.createDirectory(at: report.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try png.write(to: report.deletingLastPathComponent().appendingPathComponent("window.png"))
+        try png.write(to: report.deletingLastPathComponent().appendingPathComponent(name))
     }
     func writeTest(_ ok: Bool, error: String? = nil) {
         guard let report = selfTestReport else { return }
         var result: [String: Any] = ["ok": ok, "nativeWindow": "AppKit", "mockOnly": true, "checks": testChecks,
-            "realCodexStarted": false, "realApiRequests": 0, "configuredModelDisplayed": model.stringValue]
+            "realCodexStarted": false, "realApiRequests": 0, "configuredModelDisplayed": model.stringValue,
+            "layout": testLayout]
         if let error = error { result["error"] = error }
         do {
             try FileManager.default.createDirectory(at: report.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -384,8 +459,14 @@ while index < arguments.count {
     index += 2
 }
 guard let resources = root else { fputs("Launcher bundle resources are missing.\n", stderr); exit(1) }
+let progress = report.map { SelfTestProgress(report: $0) }
+progress?.mark("before-NSApplication.shared")
 let application = NSApplication.shared
+progress?.mark("after-NSApplication.shared")
 application.setActivationPolicy(.regular)
-let delegate = LauncherApp(root: resources, report: report)
+progress?.mark("after-setActivationPolicy")
+let delegate = LauncherApp(root: resources, report: report, progress: progress)
 application.delegate = delegate
-application.run()
+progress?.mark("before-application.run")
+withExtendedLifetime(delegate) { application.run() }
+progress?.finish()
