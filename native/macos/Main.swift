@@ -435,23 +435,6 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard let png = bitmap.representation(using: .png, properties: [:]) else { throw NSError(domain: "NativeWindow", code: 2) }
         try FileManager.default.createDirectory(at: report.deletingLastPathComponent(), withIntermediateDirectories: true)
         try png.write(to: report.deletingLastPathComponent().appendingPathComponent(name))
-        // Keep a second, independent AppKit drawing path while diagnosing the
-        // CI snapshot issue. This is the actual view's PDF representation,
-        // rasterized over the same native window background (no rebuilt UI).
-        if let pdf = NSPDFImageRep(data: content.dataWithPDF(inside: content.bounds)),
-           let pdfBitmap = NSBitmapImageRep(bitmapDataPlanes: nil,
-               pixelsWide: Int(content.bounds.width), pixelsHigh: Int(content.bounds.height),
-               bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-               colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
-           let pdfContext = NSGraphicsContext(bitmapImageRep: pdfBitmap) {
-            NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = pdfContext
-            window.backgroundColor.setFill(); content.bounds.fill(); pdf.draw(in: content.bounds)
-            NSGraphicsContext.restoreGraphicsState()
-            if let bytes = pdfBitmap.representation(using: .png, properties: [:]) {
-                let extra = name.replacingOccurrences(of: ".png", with: "-pdf.png")
-                try bytes.write(to: report.deletingLastPathComponent().appendingPathComponent(extra))
-            }
-        }
     }
     func writeTest(_ ok: Bool, error: String? = nil) {
         guard let report = selfTestReport else { return }
