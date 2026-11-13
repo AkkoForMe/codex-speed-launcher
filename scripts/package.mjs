@@ -159,6 +159,7 @@ export async function collectSourceFiles(target, sourceRoot = ROOT) {
   if (target !== 'source' && !TARGETS[target]) throw new Error('Unsupported source target.');
   const source = target === 'source';
   const files = [...TOP_FILES, ...await listFiles('src', ['.mjs'], sourceRoot), ...await listFiles('docs', ['.md'], sourceRoot)];
+  if (source || target.startsWith('darwin-')) files.push(...await listFiles('native', ['.swift'], sourceRoot));
   if (source || target.startsWith('win-')) files.push(...WINDOWS_FILES);
   if (source || target.startsWith('darwin-')) files.push(...MACOS_FILES);
   if (source) {

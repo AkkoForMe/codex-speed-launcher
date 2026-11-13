@@ -18,10 +18,20 @@ node scripts/package.mjs --target all --source
 | `codex-speed-launcher-<版本>-win-x64.zip` | Windows x64 便携包 |
 | `codex-speed-launcher-<版本>-darwin-arm64.zip` | Apple 芯片 Mac 实验包 |
 | `codex-speed-launcher-<版本>-darwin-x64.zip` | Intel Mac 实验包 |
+| `codex-speed-launcher-<版本>-darwin-arm64-app.zip` | Apple 芯片 Mac 原生小窗 |
+| `codex-speed-launcher-<版本>-darwin-x64-app.zip` | Intel Mac 原生小窗 |
 | `codex-speed-launcher-<版本>-source.zip` | 源码与验证用文件，不附带运行时 |
 | `SHA256SUMS.txt` | 当前版本已生成 ZIP 的 SHA-256 |
 
 Windows 单文件 EXE 由 `node scripts/build-executable.mjs` 单独构建，输出到同一 `dist/`。它内嵌运行时与许可证，详见 [EXE 构建说明](executable-distribution.md)。Release 工作流会对全部附件重新生成统一的 SHA-256 清单。
+
+Mac `.app` 在对应架构的 macOS 上构建。先生成并解压同版本便携包，再执行：
+
+```console
+node scripts/build-macos-app.mjs --package-dir <解压的便携包目录> --out dist
+```
+
+此步骤使用系统 Swift／AppKit 编译主程序，把已校验的 Node 与启动器资源放入应用包，并做 ad-hoc 签名。签名会改变分发包中的 Node 可执行文件，因此应用内清单会重新记录签名后的哈希；原始运行时归档来源和固定哈希继续保留。它不表示 Developer ID 签名或 Apple 公证。
 
 只生成 Windows 包：
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
-import { inspectWebpackSource, patchWebpackSource, WEBPACK_PROFILE } from '../src/webpack-speed-patches.mjs';
+import { inspectWebpackSource, patchWebpackSource, WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE, WEBPACK_PROFILES } from '../src/webpack-speed-patches.mjs';
 import { inspectOpenArchive } from '../src/preflight.mjs';
 import { sha256 } from '../src/asar.mjs';
 
@@ -124,4 +124,19 @@ test('preflight refuses a changed archive and invalid patched webpack syntax', (
   const invalid = archiveFixture();
   invalid.files[0].source += ';const invalid = ;';
   assert.throws(() => inspectOpenArchive(invalid), /syntax validation/);
+});
+
+test('macOS webpack profile requires its own audited hash and exact 8/6 resource layout', () => {
+  const mac = { sha: MACOS_WEBPACK_PROFILE.sha256, hookCount: 8, requestCount: 6 };
+  const plan = inspectOpenArchive(archiveFixture(mac));
+  assert.equal(plan.rendererProfile, MACOS_WEBPACK_PROFILE.name);
+  assert.equal(plan.resources.length, 14);
+  assert.equal(plan.resources.filter(item => item.ids.includes('api-key-service-tier-access')).length, 8);
+  assert.equal(plan.resources.filter(item => item.ids.includes('api-key-request-tier-access')).length, 6);
+  assert.equal(new Set(WEBPACK_PROFILES.map(profile => profile.sha256)).size, WEBPACK_PROFILES.length);
+  assert.ok(Object.isFrozen(MACOS_WEBPACK_PROFILE.counts));
+  assert.throws(() => inspectOpenArchive(archiveFixture({ ...mac, sha: 'b'.repeat(64) })), /matched 0 times \(expected 1\)/);
+  assert.throws(() => inspectOpenArchive(archiveFixture({ ...mac, sha: WEBPACK_PROFILE.sha256 })), /matched 8 times \(expected 7\)/);
+  assert.throws(() => inspectOpenArchive(archiveFixture({ sha: MACOS_WEBPACK_PROFILE.sha256 })), /matched 7 times \(expected 8\)/);
+  assert.throws(() => inspectOpenArchive(archiveFixture({ ...mac, requestCount: 7 })), /matched 7 times \(expected 6\)/);
 });

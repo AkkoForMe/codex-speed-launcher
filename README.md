@@ -11,7 +11,7 @@
 | 平台 | 状态 |
 | --- | --- |
 | Windows x64 | `OpenAI.Codex 26.1023.6621.0` 和 `26.1106.6628.0` 的隔离桌面与本地模拟请求验收通过，覆盖同一聊天的 Standard → Fast → Standard。新版 webpack 适配仅接受已核验的归档指纹。 |
-| macOS Apple 芯片／Intel | 实验支持，未完成 Mac 真机验收。运行前必须通过本机兼容性检查。 |
+| macOS Apple 芯片／Intel | 原生 AppKit 简约小窗；`26.1111.21308` 官方 Mac 归档只读预检通过。两种架构分别构建和验证 `.app`；Codex 菜单与真实请求仍需在本机核对。 |
 
 Codex 更新后，启动器会重新检查资源和补丁位置。检查失败时停止启动，不应把未知版本当作已支持版本。
 
@@ -49,9 +49,17 @@ Windows 现提供「简约小窗」：显示兼容性状态、Codex 版本和配
 
 便携包已附带固定版本的 Node.js，无需安装 npm 依赖。重新使用时，从 `launch-windows.cmd` 启动。
 
-## macOS（实验支持）
+## macOS
 
-Apple 芯片使用 `darwin-arm64.zip`，Intel Mac 使用 `darwin-x64.zip`。
+推荐下载 Apple 芯片版 `darwin-arm64-app.zip` 或 Intel 版 `darwin-x64-app.zip`。解压后，将 `Codex Speed Launcher.app` 放到「应用程序」或其他固定目录，再双击打开。无需安装 Node.js，也无需保持终端窗口运行。支持 macOS 13.5 或更新版本。
+
+小窗与 Windows 提供相同的信息和操作：兼容性状态、Codex 版本、配置模型，以及启动、重启、刷新和退出。Standard／Fast 仍在 Codex 原生菜单选择。重启和退出只管理本工具启动的 Codex，操作前会确认；已有其他入口启动的 Codex 需要先自行正常退出。
+
+当前 Mac 应用使用 ad-hoc 签名校验包完整性，没有 Developer ID 签名或 Apple 公证。首次打开若被系统阻止，先核对下载来源和 SHA-256，再在 Finder 使用「打开」或系统「隐私与安全性」提供的打开操作；不要关闭系统安全保护。小窗行为和验证边界见 [Mac 简约小窗](docs/macos-window.md)。
+
+### 备用脚本包
+
+Apple 芯片使用 `darwin-arm64.zip`，Intel Mac 使用 `darwin-x64.zip`；它们保留原有终端入口供排错。
 
 macOS 版仍通过终端脚本启动，暂不包含 Windows 的简约小窗。发布流程会在 Apple 芯片与 Intel 架构的 macOS 运行器上核对包完整性、执行权限、自带运行时与脚本入口；这不代表已完成真实 Codex 桌面的菜单和请求验收。
 

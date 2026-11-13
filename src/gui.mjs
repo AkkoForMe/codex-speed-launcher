@@ -48,7 +48,11 @@ export async function startGuiBridge(controller) {
 }
 
 export async function runGui(options = {}) {
-  if (process.platform !== 'win32') throw new Error('The compact window currently supports Windows only. Use launch on macOS.');
+  if (process.platform === 'darwin') {
+    const { runMacGui } = await import('./gui-macos.mjs');
+    return runMacGui(options);
+  }
+  if (process.platform !== 'win32') throw new Error('The compact window supports Windows and macOS.');
   const controller = createGuiController(options);
   const bridge = await startGuiBridge(controller);
   let child;

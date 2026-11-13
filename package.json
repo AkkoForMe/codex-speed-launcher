@@ -1,6 +1,6 @@
 {
   "name": "codex-speed-launcher",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "Portable native Fast menu launcher for Codex Desktop using custom API providers.",
@@ -12,7 +12,8 @@
     "gui": "node src/cli.mjs gui",
     "verify": "node src/cli.mjs verify",
     "package": "node scripts/package.mjs",
-    "build:exe": "node scripts/build-executable.mjs"
+    "build:exe": "node scripts/build-executable.mjs",
+    "build:macos": "node scripts/build-macos-app.mjs"
   },
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/AkkoForMe/codex-speed-launcher.git" },

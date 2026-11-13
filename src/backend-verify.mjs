@@ -182,7 +182,7 @@ export async function verifyBackend(app, {
   try {
     log('Checking the bundled Codex core against the local dummy relay.');
     const initialized = await rpc.request('initialize', {
-      clientInfo: { name: 'codex_desktop', title: 'Codex Speed Launcher local verification', version: '0.2.0' },
+      clientInfo: { name: 'codex_desktop', title: 'Codex Speed Launcher local verification', version: '0.2.1' },
       capabilities: { experimentalApi: true },
     });
     rpc.write({ jsonrpc: '2.0', method: 'initialized' });

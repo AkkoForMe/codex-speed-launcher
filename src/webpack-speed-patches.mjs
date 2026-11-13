@@ -1,4 +1,4 @@
-// The 26.1106 webpack renderer repeats these modules in lazy chunks. This
+// The audited webpack renderers repeat these modules in lazy chunks. This
 // adapter is selected only for an audited archive fingerprint in preflight.
 // Handwritten fixtures exercise the semantic contracts; no app code is shipped.
 const ID = String.raw`[A-Za-z_$][\w$]*`;
@@ -12,6 +12,18 @@ export const WEBPACK_PROFILE = Object.freeze({
   sha256: '54b74a9131680fc9eead711ed5d9f718f6127c22222ca60d2e3b577a707e2485',
   counts: Object.freeze({ 'api-key-service-tier-access': 7, 'api-key-request-tier-access': 8 }),
 });
+
+// Read-only inspection of the official macOS 26.1111.21308 (build 27194)
+// archive found the same two semantic contracts with a different chunk layout.
+// Never reuse another platform's counts or accept an unknown archive hash.
+export const MACOS_WEBPACK_PROFILE = Object.freeze({
+  version: '26.1111.21308',
+  name: 'webpack-macos-26.1111.21308',
+  sha256: '64782f30d783c24eb483e92f9a2e884ada6d24dc105fc27659ba16e073da145c',
+  counts: Object.freeze({ 'api-key-service-tier-access': 8, 'api-key-request-tier-access': 6 }),
+});
+
+export const WEBPACK_PROFILES = Object.freeze([WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE]);
 
 const hookPrefix = String.raw`(?<prefix>(?<account>${ID})=\(0,${MEMBER}\)\((?<host>${ID})\),` +
   String.raw`(?<managed>${ID})=\k<account>\?\.authMethod==="chatgpt"\|\|\k<account>\?\.authMethod==="personalAccessToken"\|\|\k<account>\?\.authMethod==="amazonBedrock",` +

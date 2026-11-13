@@ -1,14 +1,14 @@
 import { assertModuleSyntax } from './syntax-check.mjs';
 import { openAsar, sha256 } from './asar.mjs';
 import { inspectSource, patchSource, REQUIRED_IDS } from './speed-patches.mjs';
-import { inspectWebpackSource, patchWebpackSource, WEBPACK_PROFILE } from './webpack-speed-patches.mjs';
+import { inspectWebpackSource, patchWebpackSource, WEBPACK_PROFILES } from './webpack-speed-patches.mjs';
 
 // Kept separate from file opening so archive contracts can be checked against
 // handwritten fixtures. The live path always uses the read-only ASAR reader.
 export function inspectOpenArchive(archive, { checkSyntax = true } = {}) {
   const fingerprint = archive.fingerprint();
-  const webpack = fingerprint.sha256 === WEBPACK_PROFILE.sha256;
-  const expectedCounts = webpack ? WEBPACK_PROFILE.counts : Object.fromEntries(REQUIRED_IDS.map(id => [id, 1]));
+  const webpack = WEBPACK_PROFILES.find(profile => fingerprint.sha256 === profile.sha256);
+  const expectedCounts = webpack ? webpack.counts : Object.fromEntries(REQUIRED_IDS.map(id => [id, 1]));
   const matches = new Map(REQUIRED_IDS.map(id => [id, []]));
   const resources = [];
   const allowedPath = webpack ? /^webview\/assets\/async\/[^/]+\.js$/ : /^webview\/assets\/[^/]+\.js$/;
@@ -43,7 +43,7 @@ export function inspectOpenArchive(archive, { checkSyntax = true } = {}) {
   const finalFingerprint = archive.fingerprint();
   if (finalFingerprint.sha256 !== fingerprint.sha256) throw new Error('Codex changed during inspection. App unchanged.');
   return { ...finalFingerprint, resources, requiredIds: [...REQUIRED_IDS],
-    rendererProfile: webpack ? `webpack-${WEBPACK_PROFILE.version}` : 'service-tier-26.1023' };
+    rendererProfile: webpack ? (webpack.name ?? `webpack-${webpack.version}`) : 'service-tier-26.1023' };
 }
 
 export function inspectArchive(asarPath, options) {
@@ -58,7 +58,7 @@ export function publicInspection(app, plan) {
     asarPath: app.asarPath, asarSha256: plan.sha256,
     compatibility: 'signature-compatible',
     rendererProfile: plan.rendererProfile,
-    macOSStatus: app.platform === 'darwin' ? 'experimental; no real Mac validation' : undefined,
+    macOSStatus: app.platform === 'darwin' ? 'experimental; full Codex Desktop/request validation not completed' : undefined,
     patches: plan.resources.map(({ archivePath, ids, labels, sourceHash, patchedHash }) => ({ archivePath, ids, labels, sourceHash, patchedHash }))
   };
 }

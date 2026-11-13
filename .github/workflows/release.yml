@@ -48,7 +48,7 @@ jobs:
           if-no-files-found: error
 
   macos:
-    name: Verify macOS ${{ matrix.arch }} package
+    name: Build and verify macOS ${{ matrix.arch }} app
     needs: build
     strategy:
       fail-fast: false
@@ -98,6 +98,29 @@ jobs:
             printf '%s\n' "$output"
             grep -F "Codex Speed Launcher $version" <<< "$output"
           done
+          node scripts/build-macos-app.mjs --package-dir "$package" --arch "$PACKAGE_ARCH" --out app-files --work "$RUNNER_TEMP/macos-app-build"
+          mkdir -p "$RUNNER_TEMP/final app with spaces"
+          ditto -x -k "app-files/codex-speed-launcher-$version-darwin-$PACKAGE_ARCH-app.zip" "$RUNNER_TEMP/final app with spaces"
+          app="$RUNNER_TEMP/final app with spaces/Codex Speed Launcher.app"
+          codesign --verify --deep --strict "$app"
+          plutil -lint "$app/Contents/Info.plist"
+          node scripts/package.mjs --verify-dir "$app/Contents/Resources/launcher"
+          test "$("$app/Contents/Resources/launcher/runtime/node" --version)" = 'v24.22.2'
+          mkdir -p validation
+          "$app/Contents/MacOS/CodexSpeedLauncher" --self-test "$PWD/validation/report.json"
+          node -e 'const r=require("./validation/report.json"); if(r.ok!==true) process.exit(1); console.log(JSON.stringify(r))'
+          test -s validation/window.png
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: macos-app-${{ matrix.arch }}
+          path: app-files/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: macos-validation-${{ matrix.arch }}
+          path: validation/*
+          if-no-files-found: warn
 
   draft:
     if: github.ref_type == 'tag'
@@ -110,6 +133,14 @@ jobs:
         with:
           name: release-files
           path: release-files
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: macos-app-*
+          merge-multiple: true
+          path: release-files
+      - name: Generate checksums for all public downloads
+        working-directory: release-files
+        run: find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%f\n' | sort | xargs -d '\n' sha256sum > SHA256SUMS.txt
       - name: Create draft with downloadable assets
         env:
           GH_TOKEN: ${{ github.token }}
