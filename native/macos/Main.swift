@@ -145,6 +145,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let card = NSView(); card.wantsLayer = true; card.layer?.backgroundColor = NSColor.white.cgColor
         card.layer?.cornerRadius = 13; card.layer?.borderWidth = 1
         card.layer?.borderColor = NSColor(calibratedWhite: 0.9, alpha: 1).cgColor
+        stack.addArrangedSubview(card)
         let cardStack = NSStackView(); cardStack.orientation = .vertical; cardStack.alignment = .leading; cardStack.spacing = 14
         cardStack.translatesAutoresizingMaskIntoConstraints = false; card.addSubview(cardStack)
         NSLayoutConstraint.activate([
@@ -164,10 +165,9 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
             value.font = .systemFont(ofSize: 12); value.alignment = .right; value.lineBreakMode = .byTruncatingMiddle
             value.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             let row = NSStackView(views: [label(name, size: 11), NSView(), value]); row.orientation = .horizontal
-            row.widthAnchor.constraint(equalTo: cardStack.widthAnchor).isActive = true
             cardStack.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: cardStack.widthAnchor).isActive = true
         }
-        stack.addArrangedSubview(card)
         for button in [primary, refresh, quit] {
             button.bezelStyle = .rounded; button.controlSize = .large
             button.font = .systemFont(ofSize: 13); button.target = self
@@ -175,18 +175,18 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         primary.bezelColor = .systemBlue; primary.contentTintColor = .white
         primary.action = #selector(primaryClicked); primary.isEnabled = false
-        primary.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.addArrangedSubview(primary)
+        primary.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         refresh.action = #selector(refreshClicked); refresh.isEnabled = false
         quit.action = #selector(quitClicked)
         let buttons = NSStackView(views: [refresh, quit]); buttons.orientation = .horizontal
         buttons.spacing = 10; buttons.distribution = .fillEqually
-        buttons.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.addArrangedSubview(buttons)
+        buttons.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         detail.font = .systemFont(ofSize: 11); detail.textColor = .secondaryLabelColor
         detail.maximumNumberOfLines = 5
-        detail.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.addArrangedSubview(detail)
+        detail.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         footer.font = .systemFont(ofSize: 10); footer.textColor = .secondaryLabelColor
         footer.alignment = .center; footer.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(footer)
         NSLayoutConstraint.activate([
