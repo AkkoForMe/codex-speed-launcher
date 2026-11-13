@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { lstat, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { discoverApp } from './platform.mjs';
@@ -10,7 +10,8 @@ import { verifyNativeMenu } from './verify-ui.mjs';
 
 export async function prepareVerification({ appPath, artifacts } = {}) {
   const app = await discoverApp({ appPath });
-  const base = artifacts ? resolve(artifacts) : tmpdir();
+  const configuredArtifacts = artifacts || process.env.PROJECT_ARTIFACTS_DIR;
+  const base = configuredArtifacts ? resolve(configuredArtifacts) : tmpdir();
   await mkdir(base, { recursive: true });
   const directory = await mkdtemp(join(base, 'codex-speed-verify-'));
   const codexHome = join(directory, 'codex-home'), electronHome = join(directory, 'electron-profile');
@@ -68,8 +69,19 @@ sandbox = "unelevated"
   return { app, directory, codexHome, electronHome, work, relay, env };
 }
 
+export async function cleanupVerificationProfiles(test) {
+  const directory = resolve(test.directory);
+  if ((await lstat(directory)).isSymbolicLink()) throw new Error('Verification directory must not be a link.');
+  const profiles = [[test.codexHome, 'codex-home'], [test.electronHome, 'electron-profile']];
+  for (const [profile, name] of profiles) {
+    if (resolve(profile) !== join(directory, name)) throw new Error('Refusing to clean a profile outside its verification directory.');
+    if ((await lstat(profile)).isSymbolicLink()) throw new Error('Verification profile must not be a link.');
+  }
+  for (const [profile] of profiles) await rm(profile, { recursive: true, force: true });
+}
+
 export async function verifyInstalledApp({ appPath, artifacts, log = console.log, system = {} } = {}) {
-  const io = { prepareVerification, verifyBackend, launchSession, verifyNativeMenu, assertArchiveUnchanged, writeFile, ...system };
+  const io = { prepareVerification, verifyBackend, launchSession, verifyNativeMenu, assertArchiveUnchanged, cleanupVerificationProfiles, writeFile, ...system };
   const test = await io.prepareVerification({ appPath, artifacts });
   const controller = new AbortController();
   const onSignal = () => controller.abort(new Error('Verification cancelled.'));
@@ -94,6 +106,7 @@ export async function verifyInstalledApp({ appPath, artifacts, log = console.log
       codexHome: test.codexHome, env: test.env, signal: controller.signal, log });
     report.inspection = publicInspection(test.app, session.plan);
     report.runtimePatches = session.runtime.observed;
+    report.runtimeResources = session.runtime.observedResources;
     report.rendererText = await session.runtime.evaluate('document.body.innerText.slice(0,12000)');
     // The native-menu verification is separate from the core transport test.
     // It never treats a visible icon as evidence of an upstream speed guarantee.
@@ -112,6 +125,10 @@ export async function verifyInstalledApp({ appPath, artifacts, log = console.log
     }
     await test.relay.close();
     process.removeListener('SIGINT', onSignal); process.removeListener('SIGTERM', onSignal);
+    if (report.ok && report.backend.coreStopped && report.testAppStopped) {
+      try { await io.cleanupVerificationProfiles(test); report.fixtureProfilesRemoved = true; }
+      catch (error) { report.cleanupError = error.message; report.ok = false; }
+    }
     await io.writeFile(join(test.directory, 'report.json'), JSON.stringify(report, null, 2));
   }
   return report;

@@ -37,6 +37,7 @@ export async function startRuntime(port, plan, { timeout = 45_000, log = () => {
   const cdp = connection ?? await CdpConnection.connect(port, { signal });
   const sessions = new Map();
   const observed = new Set();
+  const observedResources = new Set();
   let closed = false;
   let fatalError;
   let mainSession;
@@ -64,6 +65,8 @@ export async function startRuntime(port, plan, { timeout = 45_000, log = () => {
       try {
         const ids = await fulfillPatchedResource(cdp, params, sessionId, resource);
         for (const id of ids) { observed.add(id); session.observed.add(id); }
+        observedResources.add(resource.archivePath);
+        session.resources.add(resource.archivePath);
       } catch (error) {
         await cdp.send('Fetch.failRequest', { requestId: params.requestId, errorReason: 'BlockedByClient' }, sessionId).catch(() => {});
         throw error;
@@ -101,7 +104,7 @@ export async function startRuntime(port, plan, { timeout = 45_000, log = () => {
         return;
       }
       if (sessions.has(sessionId)) return;
-      const session = { origin, observed: new Set(), ready: false };
+      const session = { origin, observed: new Set(), resources: new Set(), ready: false };
       sessions.set(sessionId, session);
       log('Attaching native Codex renderer.');
       await cdp.send('Fetch.enable', { patterns: [
@@ -126,6 +129,11 @@ export async function startRuntime(port, plan, { timeout = 45_000, log = () => {
       if (sessions.get(sessionId) !== session || closed) return;
       await evaluate(`Promise.all(${JSON.stringify(urls)}.map(async url=>{const r=await fetch(url,{cache:'reload'});if(!r.ok)throw Error('Preload failed');await r.text();return r.status}))`, sessionId);
       if (sessions.get(sessionId) !== session || closed) return;
+      // Lazy webpack chunks can repeat the same two patch IDs. Observing each
+      // ID once is insufficient: every approved resource must pass its own body
+      // hash check and successful fulfillment in this particular renderer.
+      const missing = plan.resources.filter(resource => !session.resources.has(resource.archivePath));
+      if (missing.length) throw new Error(`Not all checked resources were observed in this renderer: ${missing.map(resource => resource.archivePath).join(', ')}`);
       if (!plan.requiredIds.every(id => session.observed.has(id))) throw new Error('Not all checked patches were observed in this renderer.');
       session.ready = true;
       mainSession ??= sessionId;
@@ -158,7 +166,7 @@ export async function startRuntime(port, plan, { timeout = 45_000, log = () => {
       }
     }, 4000);
     return {
-      cdp, lost, observed: [...observed], evaluate,
+      cdp, lost, observed: [...observed], observedResources: [...observedResources], evaluate,
       get sessionId() { return mainSession; },
       async closeApp() { await cdp.send('Browser.close', {}, undefined, 3000).catch(() => {}); },
       close() { closed = true; clearInterval(heartbeat); signal?.removeEventListener('abort', onAbort); cdp.close(); }

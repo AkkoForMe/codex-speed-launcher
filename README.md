@@ -10,7 +10,7 @@
 
 | 平台 | 状态 |
 | --- | --- |
-| Windows x64 | `OpenAI.Codex 26.1023.6621.0` 的隔离桌面与本地模拟请求验收通过，覆盖同一聊天的 Standard → Fast → Standard。 |
+| Windows x64 | `OpenAI.Codex 26.1023.6621.0` 和 `26.1106.6628.0` 的隔离桌面与本地模拟请求验收通过，覆盖同一聊天的 Standard → Fast → Standard。新版 webpack 适配仅接受已核验的归档指纹。 |
 | macOS Apple 芯片／Intel | 实验支持，未完成 Mac 真机验收。运行前必须通过本机兼容性检查。 |
 
 Codex 更新后，启动器会重新检查资源和补丁位置。检查失败时停止启动，不应把未知版本当作已支持版本。
@@ -27,13 +27,17 @@ Codex 更新后，启动器会重新检查资源和补丁位置。检查失败�
 
 ## Windows
 
-推荐使用单文件 `codex-speed-launcher-<版本>-windows-x64.exe`。先用 `inspect` 只读检查，再保存工作、完全退出 Codex，双击 EXE 启动。无需安装 Node.js，运行期间保留启动器的控制台窗口。
+Windows 现提供「简约小窗」：显示兼容性状态、Codex 版本和配置模型，可点击启动、重启与退出。Standard／Fast 继续在 Codex 原生菜单中选择。小窗操作说明与状态含义见 [简约小窗](docs/compact-window.md)。源码或便携包可运行 `node src/cli.mjs gui`，原有控制台入口继续保留。
+
+推荐使用单文件 `codex-speed-launcher-<版本>-windows-x64.exe`。双击 EXE 会打开简约小窗；先等待兼容性检查完成，再保存工作并按小窗提示启动 Codex。无需安装 Node.js。
 
 ```powershell
-.\codex-speed-launcher-<版本>-windows-x64.exe inspect
+.\codex-speed-launcher-<版本>-windows-x64.exe inspect | Out-String
 ```
 
-当前 EXE 为未签名的控制台程序。下载前核对发布来源和 SHA-256；图形设置、托盘和安装向导暂未实现。构建与使用方式见 [单文件 EXE](docs/executable-distribution.md)。
+当前 EXE 为未签名的 Windows 图形子系统程序；小窗使用系统自带 WPF。下载前核对发布来源和 SHA-256；托盘和安装向导暂未实现。构建与使用方式见 [单文件 EXE](docs/executable-distribution.md)。
+
+需要在 PowerShell 执行只读检查时，使用管道等待并读取输出：`codex-speed-launcher-<版本>-windows-x64.exe inspect --json | Out-String`。需要长驻控制台会话时，使用源码或便携包的 `launch` 入口。
 
 需要保留源码、文档和运行时目录时，可使用便携 ZIP：
 
@@ -48,6 +52,8 @@ Codex 更新后，启动器会重新检查资源和补丁位置。检查失败�
 ## macOS（实验支持）
 
 Apple 芯片使用 `darwin-arm64.zip`，Intel Mac 使用 `darwin-x64.zip`。
+
+macOS 版仍通过终端脚本启动，暂不包含 Windows 的简约小窗。发布流程会在 Apple 芯片与 Intel 架构的 macOS 运行器上核对包完整性、执行权限、自带运行时与脚本入口；这不代表已完成真实 Codex 桌面的菜单和请求验收。
 
 1. 解压完整的包。
 2. 双击 `inspect-macos.command`，先检查本机应用是否兼容。

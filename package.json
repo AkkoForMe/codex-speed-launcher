@@ -1,6 +1,6 @@
 {
   "name": "codex-speed-launcher",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Portable native Fast menu launcher for Codex Desktop using custom API providers.",
@@ -9,6 +9,7 @@
     "test": "node --test",
     "inspect": "node src/cli.mjs inspect",
     "start": "node src/cli.mjs launch",
+    "gui": "node src/cli.mjs gui",
     "verify": "node src/cli.mjs verify",
     "package": "node scripts/package.mjs",
     "build:exe": "node scripts/build-executable.mjs"

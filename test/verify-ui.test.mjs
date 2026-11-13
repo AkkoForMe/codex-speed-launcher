@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getEventListeners } from 'node:events';
 import { join } from 'node:path';
+import vm from 'node:vm';
 import { verifyNativeMenu } from '../src/verify-ui.mjs';
 
 const directory = join(process.cwd(), 'test-ui-artifact');
@@ -78,6 +79,43 @@ test('native UI verifier switches Standard / Fast / Standard and checks local wi
   assert.equal(commands.filter(command => command.method === 'Input.insertText').length, 3);
   assert.ok(commands.every(command => command.sessionId === 'isolated-page'));
   assert.equal(screenshots.length, 7);
+});
+
+test('native UI verifier reads and clicks the 26.1106 checkbox without the legacy data marker', async () => {
+  const f = fixture(), evaluate = f.runtime.evaluate;
+  let nativeClicks = 0, newSelectorReads = 0;
+  f.runtime.evaluate = async source => {
+    if (!source.includes('function fastState(') && !source.includes('item.click()')) return evaluate(source);
+    const oldState = source.includes('function fastState(') ? await evaluate(source) : { checked: false, disabled: false };
+    return vm.runInNewContext(source, { document: { querySelectorAll(selector) {
+      assert.ok(selector.includes('[role="menuitemcheckbox"].FastModeToggle-qGLhyE'));
+      newSelectorReads++;
+      if (!oldState) return [];
+      return [{ getClientRects: () => [{}], checkVisibility: () => true,
+        getAttribute: name => name === 'aria-checked' ? String(oldState.checked) : null,
+        hasAttribute: () => false,
+        click: () => { nativeClicks++; void evaluate(source); } }];
+    } } });
+  };
+  const report = await verifyNativeMenu(f.runtime, { captures: f.captures, directory, system: f.system });
+  assert.equal(report.ok, true);
+  assert.equal(nativeClicks, 2);
+  assert.ok(newSelectorReads > 3);
+  assert.deepEqual(report.rows.map(row => row.capturedTier), [null, 'priority', null]);
+});
+
+test('native Fast state refuses multiple visible native checkboxes before any request', async () => {
+  const f = fixture(), evaluate = f.runtime.evaluate;
+  f.runtime.evaluate = async source => {
+    if (!source.includes('function fastState(')) return evaluate(source);
+    return vm.runInNewContext(source, { document: { querySelectorAll: () =>
+      Array.from({ length: 2 }, () => ({ getClientRects: () => [{}], checkVisibility: () => true })) } });
+  };
+  const report = await verifyNativeMenu(f.runtime, { captures: f.captures, directory,
+    system: f.system, timeoutMs: 5, pollMs: 1 });
+  assert.equal(report.ok, false);
+  assert.match(report.error, /native Fast menu item/);
+  assert.equal(f.captures.length, 0);
 });
 
 test('native UI verifier rejects dropped tier, aliased model, duplicate request and replaced chat', async () => {

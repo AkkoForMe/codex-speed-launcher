@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { verifyInstalledApp } from '../src/verify.mjs';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { cleanupVerificationProfiles, verifyInstalledApp } from '../src/verify.mjs';
 
 function fixture(backend = { ok: true, coreStopped: true, guiPreflightReady: true, sandboxReadiness: 'ready' }) {
   const calls = [];
@@ -23,6 +26,7 @@ function fixture(backend = { ok: true, coreStopped: true, guiPreflightReady: tru
     },
     async verifyNativeMenu() { calls.push('nativeMenu'); return { ok: true }; },
     assertArchiveUnchanged() { calls.push('archive.check'); },
+    async cleanupVerificationProfiles() { calls.push('profiles.cleanup'); },
     async writeFile(path, source) { calls.push('report.save'); saved = JSON.parse(source); },
   };
   return state;
@@ -61,5 +65,36 @@ test('Ready core finishes before GUI, and successful verification stops only its
   assert.equal(report.testAppStopped, true);
   assert.equal(report.appUnchanged, true);
   assert.deepEqual(state.calls, ['prepare', 'backend', 'gui.launch', 'nativeMenu', 'archive.check',
-    'gui.closeApp', 'gui.close', 'gui.stop', 'relay.close', 'report.save']);
+    'gui.closeApp', 'gui.close', 'gui.stop', 'relay.close', 'profiles.cleanup', 'report.save']);
+  assert.equal(report.fixtureProfilesRemoved, true);
+});
+
+test('A test process that failed to stop keeps its profiles', async () => {
+  const state = fixture();
+  const launch = state.system.launchSession;
+  state.system.launchSession = async () => {
+    const session = await launch();
+    session.child.stop = async () => { throw new Error('still running'); };
+    return session;
+  };
+  const report = await verifyInstalledApp({ log() {}, system: state.system });
+  assert.equal(report.ok, false);
+  assert.equal(state.calls.includes('profiles.cleanup'), false);
+  assert.match(state.saved.cleanupError, /still running/);
+});
+
+test('Profile cleanup preserves evidence and refuses an outside directory before deletion', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'launcher-cleanup-'));
+  const codexHome = join(directory, 'codex-home');
+  const electronHome = join(directory, 'electron-profile');
+  const outside = join(directory, 'outside');
+  try {
+    await Promise.all([codexHome, electronHome, outside].map(p => mkdir(p)));
+    await writeFile(join(outside, 'keep.txt'), 'preserve');
+    await writeFile(join(directory, 'mock-request-1.json'), '{}');
+    await assert.rejects(cleanupVerificationProfiles({ directory, codexHome, electronHome: outside }), /outside/);
+    assert.equal(await readFile(join(outside, 'keep.txt'), 'utf8'), 'preserve');
+    await cleanupVerificationProfiles({ directory, codexHome, electronHome });
+    assert.equal(await readFile(join(directory, 'mock-request-1.json'), 'utf8'), '{}');
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

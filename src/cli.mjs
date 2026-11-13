@@ -6,10 +6,11 @@ import { discoverApp } from './platform.mjs';
 import { inspectArchive, publicInspection } from './preflight.mjs';
 import { runLauncher } from './launch.mjs';
 
-const help = `Codex Speed Launcher 0.1.1
+const help = `Codex Speed Launcher 0.2.0
 
   inspect [--app PATH] [--json]   Read-only compatibility check
   launch  [--app PATH]            Start native Fast controls using your existing config
+  gui     [--app PATH]            Open the compact Windows launcher window
   verify  [--app PATH] [--json]    Isolated local mock test; no real API key or usage
 
 Windows x64: tested builds are listed in README.md.
@@ -24,10 +25,15 @@ export async function main(args = process.argv.slice(2)) {
     help: { type: 'boolean', short: 'h' }, version: { type: 'boolean' },
     artifacts: { type: 'string' }
   } });
-  if (values.version) { console.log('0.1.1'); return 0; }
+  if (values.version) { console.log('0.2.0'); return 0; }
   if (values.help || !positionals.length) { console.log(help); return 0; }
   const [command, ...rest] = positionals;
-  if (rest.length || !['inspect', 'launch', 'verify'].includes(command)) throw new Error('Unknown command. Use --help.');
+  if (rest.length || !['inspect', 'launch', 'verify', 'gui', 'window'].includes(command)) throw new Error('Unknown command. Use --help.');
+  if (command === 'gui' || command === 'window') {
+    if (values.json || values.artifacts) throw new Error('The GUI does not support --json or --artifacts.');
+    const { runGui } = await import('./gui.mjs');
+    return runGui({ appPath: values.app });
+  }
   if (command === 'inspect') {
     const app = await discoverApp({ appPath: values.app });
     const result = publicInspection(app, inspectArchive(app.asarPath));

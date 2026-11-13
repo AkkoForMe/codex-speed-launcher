@@ -68,7 +68,7 @@ test('source allowlist excludes local configs, logs, caches and unrelated projec
     '.github/workflows/ci.yml', '.github/ISSUE_TEMPLATE/bug_report.md', 'src/cli.mjs', 'docs/readme.md',
     'scripts/package.mjs', 'test/package.test.mjs', 'launch-windows.cmd', 'inspect-windows.cmd',
     'launch-macos.command', 'inspect-macos.command'];
-  const forbidden = ['auth.json', 'config.toml', '.env', '.cache/node/node.exe', 'artifacts/report.md',
+  const forbidden = ['AGENTS.md', 'auth.json', 'config.toml', '.env', '.cache/node/node.exe', 'artifacts/report.md',
     'logs/session.log', 'data/local.sqlite', 'other-project/main.mjs', 'src/private.json', 'docs/secret.env', 'runtime/node.exe'];
   for (const file of [...allowed, ...forbidden]) await put(root, file);
   const source = (await collectSourceFiles('source', root)).map(item => item.path);

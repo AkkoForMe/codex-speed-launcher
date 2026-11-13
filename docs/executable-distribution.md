@@ -2,13 +2,13 @@
 
 Windows x64 可使用单个 `.exe` 启动 Codex Speed Launcher，无需另装 Node.js，也无需把 `src` 和 `runtime` 文件夹放在旁边。程序继续使用本机已安装的官方 Codex 和已有连接配置。
 
-这是一种控制台启动器。双击 `.exe` 后，它启动 Codex，并保持控制台窗口以维持运行时适配。它当前没有独立设置窗口、托盘菜单、自动更新或安装向导。
+双击 `.exe` 后，它打开 Windows 自带的简约 WPF 小窗。小窗负责兼容性检查、启动、重启和退出由本工具启动的 Codex；运行时适配仍由 EXE 后台进程维持。它当前没有托盘菜单、自动更新或安装向导。
 
 ## EXE、ZIP 与安装包
 
 | 形式 | 适合的用途 | 当前状态 |
 | --- | --- | --- |
-| 单文件 `.exe` | 下载后直接运行；通过命令参数检查和诊断 | 已提供 Windows x64 构建脚本 |
+| 单文件 `.exe` | 双击打开小窗，也可通过命令参数检查和诊断 | 已提供 Windows x64 构建脚本 |
 | `.zip` | 压缩下载体积，放入教程、许可证或完整源码 | 现有便携包和源码包仍可使用 |
 | 安装包／托盘应用 | 开始菜单快捷方式、托盘状态、升级和卸载 | 后续产品形态，当前未实现 |
 | macOS `.app`／`.dmg` | 面向 Mac 的常见双击入口和分发方式 | 需要 Mac 构建与真机验收，当前未实现 |
@@ -17,19 +17,19 @@ EXE 是程序文件，ZIP 是归档格式，二者可以一起使用。例如，
 
 ## 使用
 
-先按项目 README 配置本机 Codex，确认普通请求可用。关闭正在进行的任务并完全退出 Codex 后，再双击 `codex-speed-launcher-<版本>-windows-x64.exe`。启动器不会自动关闭已运行的官方应用。
+先按项目 README 配置本机 Codex，确认普通请求可用。双击 `codex-speed-launcher-<版本>-windows-x64.exe`，等待小窗完成检查；如果 Codex 已在运行，先保存工作并从 Codex 菜单正常退出，再点击「刷新状态」。启动器不会自动接管其他入口打开的官方应用。
 
 也可在 PowerShell 中执行：
 
 ```powershell
-.\codex-speed-launcher-<版本>-windows-x64.exe inspect --json
-.\codex-speed-launcher-<版本>-windows-x64.exe launch
-.\codex-speed-launcher-<版本>-windows-x64.exe --licenses
+.\codex-speed-launcher-<版本>-windows-x64.exe inspect --json | Out-String
+.\codex-speed-launcher-<版本>-windows-x64.exe gui
+.\codex-speed-launcher-<版本>-windows-x64.exe --licenses | Out-String
 ```
 
-`inspect` 只读检查客户端兼容性。`launch` 使用现有配置启动；不带参数时也执行启动。`--licenses` 从 EXE 内输出项目许可证、上游声明、Node.js 许可证及构建工具声明，单独分享 EXE 时这些内容仍可访问。
+`inspect` 只读检查客户端兼容性；`gui` 打开小窗。不带参数时默认打开小窗。`--licenses` 从 EXE 内输出项目许可证、上游声明、Node.js 许可证及构建工具声明，单独分享 EXE 时这些内容仍可访问。GUI 子系统程序在 PowerShell 中应使用管道等待并读取文本输出。
 
-运行期间保留控制台窗口。等待当前任务完成并正常退出 Codex，启动器随后结束。`Ctrl+C` 用于关闭本次由启动器启动的应用；不要在尚未保存的工作期间使用。
+小窗运行期间不显示控制台。等待当前任务完成并正常退出 Codex，再关闭小窗。需要长驻控制台及 `Ctrl+C` 行为时，使用源码或便携包的 `node src/cli.mjs launch`，不要依赖图形 EXE 的终端等待或信号行为。
 
 ## 构建
 
@@ -47,7 +47,7 @@ node scripts/build-executable.mjs --out artifacts/executable-candidate
 1. 验证固定 Node.js `24.22.2` Windows x64 归档的 SHA-256。
 2. 验证固定 esbuild `0.28.2` 和 postject `1.0.0-alpha.6` 归档的 SHA-512。
 3. 用 esbuild 把启动器源码合并为 CommonJS，再由相同版本 Node.js 生成 SEA 数据。
-4. 复制官方 Node.js 可执行文件，仅清除副本中已无法保留的 Authenticode 表，再用 postject 注入程序和许可证。
+4. 复制官方 Node.js 可执行文件，清除副本中已无法保留的 Authenticode 表，并切换为 Windows GUI 子系统，再用 postject 注入程序和许可证。
 5. 对新 EXE 运行版本、许可证和有效／无效 ESM 语法检查；通过后写入输出目录。
 
 下载与临时文件保存在 `.cache/`；用户运行 EXE 时不下载上述构建工具。构建没有打包 Codex 应用文件，也没有改写已安装 Codex 的资源或签名。

@@ -164,7 +164,6 @@ export async function collectSourceFiles(target, sourceRoot = ROOT) {
   if (source) {
     files.push(...await listFiles('scripts', ['.mjs'], sourceRoot), ...await listFiles('test', ['.mjs'], sourceRoot));
     files.push('.gitignore', '.gitattributes', ...await listFiles('.github', ['.yml', '.yaml', '.md'], sourceRoot));
-    try { await lstat(join(sourceRoot, 'AGENTS.md')); files.push('AGENTS.md'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
   if (!files.includes('src/cli.mjs')) throw new Error('Source is incomplete: src/cli.mjs is missing.');
   return Promise.all([...new Set(files)].sort().map(async (path) => {

@@ -47,9 +47,61 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  macos:
+    name: Verify macOS ${{ matrix.arch }} package
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            arch: arm64
+          - os: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.22.2
+      - name: Test launcher logic on macOS
+        run: node --test
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-files
+          path: release-files
+      - name: Verify the actual downloadable macOS package
+        env:
+          PACKAGE_ARCH: ${{ matrix.arch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "JSON.parse(require('fs').readFileSync('package.json')).version")"
+          test "$(node -p process.arch)" = "$PACKAGE_ARCH"
+          archive="codex-speed-launcher-$version-darwin-$PACKAGE_ARCH.zip"
+          (cd release-files && shasum -a 256 --check SHA256SUMS.txt)
+          folder="$RUNNER_TEMP/portable package with spaces"
+          mkdir -p "$folder"
+          ditto -x -k "release-files/$archive" "$folder"
+          package="$folder/${archive%.zip}"
+          node scripts/package.mjs --verify-dir "$package"
+          test -x "$package/runtime/node"
+          test -x "$package/inspect-macos.command"
+          test -x "$package/launch-macos.command"
+          bash -n "$package/inspect-macos.command" "$package/launch-macos.command"
+          test "$("$package/runtime/node" --version)" = 'v24.22.2'
+          test "$("$package/runtime/node" "$package/src/cli.mjs" --version)" = "$version"
+          for entry in inspect-macos.command launch-macos.command; do
+            output="$(printf '\n' | env PATH=/usr/bin:/bin:/usr/sbin:/sbin "$package/$entry" --help)"
+            printf '%s\n' "$output"
+            grep -F "Codex Speed Launcher $version" <<< "$output"
+          done
+
   draft:
     if: github.ref_type == 'tag'
-    needs: build
+    needs: [build, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write

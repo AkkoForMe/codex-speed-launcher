@@ -6,7 +6,10 @@ import { validateMockConfig } from './backend-verify.mjs';
 const MODEL = 'gpt-6.1-sol';
 const MARKER = 'SPEED_TEST_OK';
 const DUMMY_KEY = 'local-verification-dummy-key';
-const FAST = '[role="menuitemcheckbox"][data-fast-mode-enabled]';
+// 26.1023 puts the data marker on the checkbox. In the audited 26.1106
+// renderer it moved to the multi-tier flyout span, while the simple native
+// checkbox keeps aria-checked and the exact FastModeToggle CSS module class.
+const FAST = '[role="menuitemcheckbox"][data-fast-mode-enabled],[role="menuitemcheckbox"].FastModeToggle-qGLhyE';
 
 function safeError(error) {
   return String(error?.message ?? error).replace(/Bearer\s+[^\s"']+/gi, 'Bearer [redacted]')
@@ -43,12 +46,11 @@ function pageState() {
   };
 }
 
-function fastState() {
-  const items = [...document.querySelectorAll('[role="menuitemcheckbox"][data-fast-mode-enabled]')];
+function fastState(selector) {
+  const items = [...document.querySelectorAll(selector)].filter(item => item.getClientRects().length > 0
+    && !(typeof item.checkVisibility === 'function' && !item.checkVisibility({ opacityProperty: true, visibilityProperty: true })));
   if (items.length !== 1) return null;
   const item = items[0];
-  if (item.getClientRects().length === 0 || (typeof item.checkVisibility === 'function'
-    && !item.checkVisibility({ opacityProperty: true, visibilityProperty: true }))) return null;
   return { checked: item.getAttribute('aria-checked') === 'true',
     disabled: item.getAttribute('aria-disabled') === 'true' || item.hasAttribute('disabled')
       || item.hasAttribute('data-disabled') };
@@ -121,6 +123,7 @@ export async function verifyNativeMenu(runtime, {
     return value;
   };
   const evaluate = fn => evaluateSource(`(${fn.toString()})()`);
+  const readFastState = () => evaluateSource(`(${fastState.toString()})(${JSON.stringify(FAST)})`);
   const send = async (method, params) => {
     signal?.throwIfAborted();
     const value = await runtime.cdp.send(method, params, runtime.sessionId);
@@ -146,7 +149,7 @@ export async function verifyNativeMenu(runtime, {
     await io.sleep(200, undefined, { signal });
     signal?.throwIfAborted();
     if (menuChecked !== undefined) {
-      const state = await evaluate(fastState);
+      const state = await readFastState();
       if (!state || state.disabled || state.checked !== menuChecked) {
         throw new Error('The rendered native Fast menu changed before its screenshot.');
       }
@@ -176,17 +179,17 @@ export async function verifyNativeMenu(runtime, {
     ]) {
       await closeMenu();
       await evaluate(modelMenu);
-      let toggle = await waitFor(() => evaluate(fastState), 'native Fast menu item');
+      let toggle = await waitFor(readFastState, 'native Fast menu item');
       if (toggle.disabled) throw new Error('The native Fast control is disabled.');
       if (toggle.checked !== checked) {
-        await evaluateSource(`(()=>{const item=document.querySelector(${JSON.stringify(FAST)});if(!item)throw Error('Native Fast control disappeared');item.click();return true})()`);
+        await evaluateSource(`(()=>{const items=[...document.querySelectorAll(${JSON.stringify(FAST)})].filter(item=>item.getClientRects().length>0&&!(typeof item.checkVisibility==='function'&&!item.checkVisibility({opacityProperty:true,visibilityProperty:true})));if(items.length!==1)throw Error('Native Fast control disappeared or became ambiguous');const item=items[0];if(item.getAttribute('aria-disabled')==='true'||item.hasAttribute('disabled')||item.hasAttribute('data-disabled'))throw Error('Native Fast control is disabled');item.click();return true})()`);
         // The native menu may close after selection. Reopen it to read the
         // committed rendered state before sending, without changing the tier.
         await closeMenu();
         await waitFor(async () => (await evaluate(pageState)).modelLabel, 'model control after speed selection');
         await evaluate(modelMenu);
         toggle = await waitFor(async () => {
-          const state = await evaluate(fastState);
+          const state = await readFastState();
           return state && state.checked === checked ? state : null;
         }, `${label} menu selection`);
       }

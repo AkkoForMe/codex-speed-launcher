@@ -21,6 +21,14 @@ test('runtime binds resources to the native origin and exact approved path', () 
   ]) assert.equal(resourceForUrl(url, [RESOURCE], 'app://-'), null);
 });
 
+test('webpack lazy resources remain bound to exact audited async paths and native origin', () => {
+  const lazy = { ...RESOURCE, runtimePath: 'assets/async/123.audited.js', archivePath: 'webview/assets/async/123.audited.js' };
+  assert.equal(resourceForUrl('app://-/assets/async/123.audited.js', [lazy], 'app://-'), lazy);
+  assert.equal(resourceForUrl('app://-/webview/assets/async/123.audited.js', [lazy], 'app://-'), lazy);
+  assert.equal(resourceForUrl('app://-/assets/async/other.js', [lazy], 'app://-'), null);
+  assert.equal(resourceForUrl('https://example.test/assets/async/123.audited.js', [lazy], 'app://-'), null);
+});
+
 test('runtime patch preserves security headers and removes stale compressed size metadata', async () => {
   const calls = [];
   const cdp = { async send(method, params, session) {
@@ -124,6 +132,7 @@ test('runtime verifies every required resource and leaves external resources unt
   const runtime = await startRuntime(50000, PLAN, { timeout: 500, connection: cdp });
   try {
     assert.deepEqual(runtime.observed, PLAN.requiredIds);
+    assert.deepEqual(runtime.observedResources, [RESOURCE.archivePath]);
     cdp.emit('Fetch.requestPaused', { requestId: 'external', request: { url: 'https://example.com/assets/native-speed.js' } }, runtime.sessionId);
     await new Promise(resolve => setImmediate(resolve));
     assert.ok(cdp.commands.some(({ method, params }) => method === 'Fetch.continueRequest' && params.requestId === 'external'));
@@ -132,6 +141,84 @@ test('runtime verifies every required resource and leaves external resources unt
     assert.match((await runtime.lost).message, /connection lost/);
   } finally { runtime.close(); }
   assert.equal(cdp.closed, true);
+});
+
+class RepeatedIdConnection extends EventEmitter {
+  commands = [];
+  bodies = new Map();
+  waiting = new Map();
+  closed = false;
+  constructor(resources, { omit = [], secondRendererOmit = [] } = {}) {
+    super(); this.resources = resources; this.omit = omit; this.secondRendererOmit = secondRendererOmit;
+  }
+  attach(sessionId) {
+    this.emit('Target.attachedToTarget', { sessionId,
+      targetInfo: { type: 'page', url: 'app://-/index.html' }, waitingForDebugger: true });
+  }
+  async send(method, params = {}, sessionId) {
+    this.commands.push({ method, params, sessionId });
+    if (method === 'Target.setAutoAttach') queueMicrotask(() => this.attach('initial'));
+    if (method === 'Runtime.evaluate') {
+      if (params.expression.startsWith('({url:')) return { result: { value: { url: 'app://-/index.html', ready: 'complete' } } };
+      if (params.expression.startsWith('Promise.all')) {
+        for (const resource of this.resources) {
+          if ((sessionId === 'secondary' ? this.secondRendererOmit : this.omit).includes(resource.archivePath)) continue;
+          const requestId = `${sessionId}-${resource.archivePath}`;
+          this.bodies.set(requestId, resource.original);
+          const completion = new Promise(resolve => this.waiting.set(requestId, resolve));
+          this.emit('Fetch.requestPaused', { requestId, responseStatusCode: 200,
+            request: { url: `app://-/${resource.runtimePath}` } }, sessionId);
+          await completion;
+        }
+        // All fetches report HTTP 200 even if a resource bypassed interception.
+        return { result: { value: this.resources.map(() => 200) } };
+      }
+    }
+    if (method === 'Fetch.getResponseBody') return { body: this.bodies.get(params.requestId), base64Encoded: false };
+    if (method === 'Fetch.fulfillRequest' || method === 'Fetch.failRequest') this.waiting.get(params.requestId)?.();
+    return {};
+  }
+  close() { this.closed = true; for (const resolve of this.waiting.values()) resolve(); }
+}
+
+const REPEATED_RESOURCES = Array.from({ length: 15 }, (_, index) => ({
+  archivePath: `webview/assets/async/audited-${index}.js`, runtimePath: `assets/async/audited-${index}.js`,
+  original: `original ${index}`, sourceHash: sha256(`original ${index}`),
+  content: `patched ${index}`, patchedHash: sha256(`patched ${index}`), ids: [index < 7 ? 'hook' : 'request'],
+}));
+const REPEATED_PLAN = { requiredIds: ['hook', 'request'], resources: REPEATED_RESOURCES };
+
+test('runtime rejects an omitted duplicate resource even when both patch IDs and all fetches succeed', async () => {
+  const omitted = REPEATED_RESOURCES[3].archivePath;
+  const cdp = new RepeatedIdConnection(REPEATED_RESOURCES, { omit: [omitted] });
+  await assert.rejects(startRuntime(50000, REPEATED_PLAN, { timeout: 500, connection: cdp }),
+    error => /Not all checked resources/.test(error.message) && error.message.includes(omitted));
+  assert.equal(cdp.closed, true);
+  const fulfilled = cdp.commands.filter(command => command.method === 'Fetch.fulfillRequest');
+  assert.equal(fulfilled.length, 14);
+});
+
+test('runtime verifies every exact lazy resource before accepting the 7/8 repeated patch profile', async () => {
+  const cdp = new RepeatedIdConnection(REPEATED_RESOURCES);
+  const runtime = await startRuntime(50000, REPEATED_PLAN, { timeout: 500, connection: cdp });
+  try {
+    assert.deepEqual(runtime.observed, ['hook', 'request']);
+    assert.deepEqual(runtime.observedResources, REPEATED_RESOURCES.map(resource => resource.archivePath));
+    assert.equal(cdp.commands.filter(command => command.method === 'Fetch.fulfillRequest').length, 15);
+  } finally { runtime.close(); }
+});
+
+test('a new renderer must verify all repeated resources independently of an already ready renderer', async () => {
+  const omitted = REPEATED_RESOURCES[9].archivePath;
+  const cdp = new RepeatedIdConnection(REPEATED_RESOURCES, { secondRendererOmit: [omitted] });
+  const runtime = await startRuntime(50000, REPEATED_PLAN, { timeout: 500, connection: cdp });
+  try {
+    cdp.attach('secondary');
+    const error = await runtime.lost;
+    assert.match(error.message, /Not all checked resources/);
+    assert.ok(error.message.includes(omitted));
+    assert.equal(runtime.sessionId, 'initial');
+  } finally { runtime.close(); }
 });
 
 test('runtime handles a detached initializing renderer when its replacement verifies successfully', async () => {

@@ -50,6 +50,22 @@ export function unsignedPeCopy(source) {
   return offset + size === bytes.length ? bytes.subarray(0, offset) : bytes;
 }
 
+/** Make the standalone launcher a GUI-subsystem process so a double-click
+ * opens only the compact WPF window. A parent that explicitly supplies pipes
+ * can still capture standard handles for commands such as `inspect`.
+ */
+export function windowsGuiSubsystemCopy(source) {
+  const bytes = Buffer.from(source);
+  if (bytes.length < 64 || bytes.readUInt16LE(0) !== 0x5a4d) throw new Error('The runtime is not a DOS/PE executable.');
+  const pe = bytes.readUInt32LE(0x3c), optional = pe + 24;
+  if (pe < 64 || optional + 70 > bytes.length || bytes.readUInt32LE(pe) !== 0x4550
+    || bytes.readUInt16LE(optional) !== 0x20b) throw new Error('The runtime is not an expected PE32+ executable.');
+  const subsystem = optional + 68;
+  if (bytes.readUInt16LE(subsystem) !== 3) throw new Error('The runtime is not a console-subsystem executable.');
+  bytes.writeUInt16LE(2, subsystem);
+  return bytes;
+}
+
 export function verifyToolArchive(bytes, spec) {
   const actual = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
   if (actual !== spec.integrity) throw new Error(`Build tool integrity failed: ${spec.file}`);
@@ -110,18 +126,14 @@ export function assertNoBuildPaths(bytes, paths) {
 export function seaEntry(entryPath, syntaxPath) {
   return `import { main } from ${JSON.stringify(entryPath)};
 import { assertModuleSyntax } from ${JSON.stringify(syntaxPath)};
+import { showGuiFailure } from ${JSON.stringify(join(dirname(entryPath), 'gui.mjs'))};
 import { getAsset } from 'node:sea';
 import { readFileSync } from 'node:fs';
-import { createInterface } from 'node:readline';
 const arguments_ = process.argv.slice(2);
-const defaultLaunch = arguments_.length === 0;
+const defaultGui = arguments_.length === 0;
+const guiRequest = defaultGui || ['gui', 'window'].includes(arguments_[0]);
 async function finish(code) {
   process.exitCode = code;
-  if (defaultLaunch && process.stdin.isTTY && process.stdout.isTTY) {
-    const terminal = createInterface({ input: process.stdin, output: process.stdout });
-    await new Promise(resolve => terminal.question('Press Return to close this window. ', resolve));
-    terminal.close();
-  }
 }
 async function run() {
   if (arguments_[0] === '--licenses' && arguments_.length === 1) {
@@ -131,11 +143,12 @@ async function run() {
   if (arguments_[0] === '--csl-check-module' && arguments_.length === 1) {
     assertModuleSyntax(readFileSync(0, 'utf8')); return 0;
   }
-  return main(defaultLaunch ? ['launch'] : arguments_);
+  return main(defaultGui ? ['gui'] : arguments_);
 }
-run().then(finish, error => {
+run().then(finish, async error => {
   console.error('Codex Speed Launcher: ' + error.message);
   if (error instanceof AggregateError) for (const cause of error.errors) console.error('  ' + cause.message);
+  if (guiRequest) await showGuiFailure(error).catch(() => {});
   return finish(1);
 });
 `;
@@ -212,7 +225,7 @@ export async function buildExecutable({ out = join(ROOT, 'dist'), cache = join(R
   await writeFile(configPath, `${JSON.stringify(seaConfig('launcher.cjs', 'launcher.blob', { licenses: 'THIRD_PARTY_LICENSES.txt' }), null, 2)}\n`);
   run(nodeExe, ['--experimental-sea-config', 'sea-config.json'], { cwd: work });
   const pending = join(work, name);
-  await writeFile(pending, unsignedPeCopy(node.executable));
+  await writeFile(pending, windowsGuiSubsystemCopy(unsignedPeCopy(node.executable)));
   const { inject } = require(postjectModule);
   await inject(pending, 'NODE_SEA_BLOB', await readFile(blob), { sentinelFuse: SEA_FUSE });
   // Every generated executable checks its real parser, not just bundle syntax.
@@ -226,6 +239,7 @@ export async function buildExecutable({ out = join(ROOT, 'dist'), cache = join(R
   const receipt = {
     format: 1, name, version: metadata.version, platform: 'win32', architecture: 'x64',
     packaging: 'Node.js single executable application', signed: false,
+    windowsSubsystem: 'gui', defaultCommand: 'gui',
     executableSha256: sha256(bytes), executableBytes: bytes.length,
     runtime: { version: node.version, archive: node.file, archiveSha256: node.archiveSha256 },
     buildTools: Object.fromEntries(Object.entries(TOOL_SPECS).map(([key, spec]) => [key, { ...spec }])),
@@ -245,7 +259,7 @@ export async function main(args = process.argv.slice(2)) {
   const options = {};
   for (let index = 0; index < args.length; index++) {
     if (args[index] === '--help') {
-      console.log('Usage: node scripts/build-executable.mjs [--out DIR] [--cache DIR] [--node-cache DIR] [--force]\nBuilds a Windows x64 console executable with embedded licenses. Requires Windows x64; no global installation.'); return;
+      console.log('Usage: node scripts/build-executable.mjs [--out DIR] [--cache DIR] [--node-cache DIR] [--force]\nBuilds a Windows x64 compact-window executable with embedded licenses. Requires Windows x64; no global installation.'); return;
     }
     if (args[index] === '--force') { options.force = true; continue; }
     const key = { '--out': 'out', '--cache': 'cache', '--node-cache': 'nodeCache' }[args[index]];

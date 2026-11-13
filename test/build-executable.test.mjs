@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
-import { assertNoBuildPaths, buildToolSpecs, seaConfig, seaEntry, unsignedPeCopy, verifyToolArchive } from '../scripts/build-executable.mjs';
+import { assertNoBuildPaths, buildToolSpecs, seaConfig, seaEntry, unsignedPeCopy, verifyToolArchive, windowsGuiSubsystemCopy } from '../scripts/build-executable.mjs';
 
 test('SEA configuration preserves strict ESM parsing and disables cross-build snapshots/caches', () => {
   const config = seaConfig('bundle.cjs', 'bundle.blob', { licenses: 'LICENSE' });
@@ -29,13 +29,14 @@ test('executable privacy scan rejects author paths in both separator forms and e
   assert.throws(() => assertNoBuildPaths(Buffer.from(path, 'utf16le'), [path]), /absolute build path/);
 });
 
-test('SEA entry uses explicit CLI dispatch and carries an unevaluated module-check path', () => {
+test('SEA entry opens the compact window by default and keeps explicit CLI dispatch', () => {
   const entry = seaEntry('C:/a folder/src/cli.mjs', 'C:/a folder/src/syntax-check.mjs');
   assert.ok(entry.includes('import { main } from "C:/a folder/src/cli.mjs";'));
-  assert.ok(entry.includes("main(defaultLaunch ? ['launch'] : arguments_)"));
+  assert.ok(entry.includes("main(defaultGui ? ['gui'] : arguments_)"));
+  assert.ok(entry.includes('if (guiRequest) await showGuiFailure(error)'));
   assert.ok(entry.includes("getAsset('licenses', 'utf8')"));
   assert.ok(entry.includes("assertModuleSyntax(readFileSync(0, 'utf8'))"));
-  assert.ok(entry.includes('process.stdin.isTTY && process.stdout.isTTY'));
+  assert.ok(!entry.includes('terminal.question'));
 });
 
 test('build tools have fixed HTTPS registries and reject corrupted downloads', () => {
@@ -65,4 +66,16 @@ test('Windows executable copy clears the Authenticode directory without mutating
   source.writeUInt32LE(1000, security);
   assert.throws(() => unsignedPeCopy(source), /Invalid PE certificate table/);
   assert.throws(() => unsignedPeCopy(Buffer.from('bad binary')), /not a DOS\/PE/);
+});
+
+test('standalone executable uses the Windows GUI subsystem without mutating the input', () => {
+  const source = Buffer.alloc(256);
+  source.writeUInt16LE(0x5a4d, 0); source.writeUInt32LE(64, 0x3c);
+  source.writeUInt32LE(0x4550, 64); source.writeUInt16LE(0x20b, 88);
+  source.writeUInt16LE(3, 88 + 68);
+  const result = windowsGuiSubsystemCopy(source);
+  assert.equal(result.readUInt16LE(88 + 68), 2);
+  assert.equal(source.readUInt16LE(88 + 68), 3);
+  source.writeUInt16LE(2, 88 + 68);
+  assert.throws(() => windowsGuiSubsystemCopy(source), /console-subsystem/);
 });
