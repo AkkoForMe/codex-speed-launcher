@@ -417,12 +417,41 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     func screenshot(name: String = "window.png") throws {
         guard let report = selfTestReport, let content = window.contentView else { return }
-        content.layoutSubtreeIfNeeded(); content.displayIfNeeded()
-        guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { throw NSError(domain: "NativeWindow", code: 1) }
-        content.cacheDisplay(in: content.bounds, to: bitmap)
+        content.layoutSubtreeIfNeeded()
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil,
+            pixelsWide: Int(content.bounds.width), pixelsHigh: Int(content.bounds.height),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+            let context = NSGraphicsContext(bitmapImageRep: bitmap) else { throw NSError(domain: "NativeWindow", code: 1) }
+        // Window background is outside contentView. Fill it explicitly, then
+        // force the view and every descendant to redraw into this context.
+        // cacheDisplay can otherwise return transparent, previously cached
+        // layer regions on the second snapshot in the same run-loop turn.
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        window.backgroundColor.setFill(); content.bounds.fill()
+        content.displayIgnoringOpacity(content.bounds, in: context)
+        NSGraphicsContext.restoreGraphicsState()
         guard let png = bitmap.representation(using: .png, properties: [:]) else { throw NSError(domain: "NativeWindow", code: 2) }
         try FileManager.default.createDirectory(at: report.deletingLastPathComponent(), withIntermediateDirectories: true)
         try png.write(to: report.deletingLastPathComponent().appendingPathComponent(name))
+        // Keep a second, independent AppKit drawing path while diagnosing the
+        // CI snapshot issue. This is the actual view's PDF representation,
+        // rasterized over the same native window background (no rebuilt UI).
+        if let pdf = NSPDFImageRep(data: content.dataWithPDF(inside: content.bounds)),
+           let pdfBitmap = NSBitmapImageRep(bitmapDataPlanes: nil,
+               pixelsWide: Int(content.bounds.width), pixelsHigh: Int(content.bounds.height),
+               bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+               colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+           let pdfContext = NSGraphicsContext(bitmapImageRep: pdfBitmap) {
+            NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = pdfContext
+            window.backgroundColor.setFill(); content.bounds.fill(); pdf.draw(in: content.bounds)
+            NSGraphicsContext.restoreGraphicsState()
+            if let bytes = pdfBitmap.representation(using: .png, properties: [:]) {
+                let extra = name.replacingOccurrences(of: ".png", with: "-pdf.png")
+                try bytes.write(to: report.deletingLastPathComponent().appendingPathComponent(extra))
+            }
+        }
     }
     func writeTest(_ ok: Bool, error: String? = nil) {
         guard let report = selfTestReport else { return }
