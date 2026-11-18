@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
-import { inspectWebpackSource, patchWebpackSource, WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE, WEBPACK_PROFILES } from '../src/webpack-speed-patches.mjs';
+import { inspectWebpackSource, patchWebpackSource, WEBPACK_PROFILE, WINDOWS_261111_WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE, WEBPACK_PROFILES } from '../src/webpack-speed-patches.mjs';
 import { inspectOpenArchive } from '../src/preflight.mjs';
 import { sha256 } from '../src/asar.mjs';
 
@@ -10,7 +10,7 @@ const HOOK = 'function hook(host){let cache=readCache(),query,result,output,acco
 const REQUEST = 'async function requestAccess(store,host){try{let result=await async function(store,host){let auth=await (0,accounts.mode)(store,host);if("chatgpt"!==auth&&"personalAccessToken"!==auth&&"amazonBedrock"!==auth)return null;let requirements=await (0,requirementsApi.read)(store,host,{priority:"critical"});return store.query.setData(queries.access,{authMethod:auth,hostId:host},requirements),(0,requirementsApi.normalize)(requirements)}(store,host);return result}catch(error){throw Error("Failed to read service tier for request")}}';
 const SOURCE = `${HOOK};${REQUEST}`;
 
-function harness({ mode = 'apikey', loading = false, pending = false, requirements = {} } = {}, patched = true) {
+function harness({ mode = 'apikey', loading = false, pending = false, requirements = {}, ultrafast = false } = {}, patched = true) {
   const calls = [], cache = [];
   const context = vm.createContext({ readCache: () => cache,
     accounts: { read: () => ({ authMethod: mode, isLoading: loading }), mode: async () => mode },
@@ -18,7 +18,7 @@ function harness({ mode = 'apikey', loading = false, pending = false, requiremen
     requirementsApi: { read: async (...args) => { calls.push(args); return requirements; },
       normalize: requirements => ({ fast: requirements.fast !== false, ultrafast: requirements.ultrafast !== false }) },
   });
-  vm.runInContext(patched ? patchWebpackSource(SOURCE).content : SOURCE, context);
+  vm.runInContext(patched ? patchWebpackSource(SOURCE, { ultrafast }).content : SOURCE, context);
   const store = { query: { setData: (...args) => calls.push(args) } };
   return { access: () => context.hook('local'), request: () => context.requestAccess(store, 'local'), calls,
     setMode(value) { mode = value; }, setLoading(value) { loading = value; } };
@@ -49,17 +49,32 @@ test('webpack API key and null custom provider get Fast in UI and request paths 
 
 test('webpack unknown auth modes stay denied and managed modes retain their requirement flags', async () => {
   for (const mode of ['copilot', 'unknownFutureAuth']) {
-    const current = harness({ mode });
+    const current = harness({ mode, ultrafast: true });
     assert.equal(current.access().serviceTierAccess, null);
     assert.equal(await current.request(), null);
     assert.deepEqual(current.calls, []);
   }
   for (const mode of ['chatgpt', 'personalAccessToken', 'amazonBedrock']) {
-    const current = harness({ mode, requirements: { fast: false, ultrafast: false } });
+    const current = harness({ mode, requirements: { fast: false, ultrafast: false }, ultrafast: true });
     assert.equal(current.access().serviceTierAccess.fast, false);
-    assert.equal((await current.request()).fast, false);
+    assert.equal(current.access().serviceTierAccess.ultrafast, false);
+    const requestAccess = await current.request();
+    assert.equal(requestAccess.fast, false);
+    assert.equal(requestAccess.ultrafast, false);
     assert.equal(current.calls.length, 2);
     assert.equal(harness({ mode, requirements: {} }).access().serviceTierAccess.fast, true);
+  }
+});
+
+test('webpack Ultrafast opt-in enables both API key access paths', async () => {
+  const enabled = { ultrafast: true };
+  const patched = patchWebpackSource(SOURCE, enabled).content;
+  assert.equal(patchWebpackSource(patched, enabled).content, patched);
+  for (const mode of ['apikey', null]) {
+    const current = harness({ mode, ...enabled });
+    assert.equal(current.access().serviceTierAccess.ultrafast, true);
+    assert.equal((await current.request()).ultrafast, true);
+    assert.deepEqual(current.calls, []);
   }
 });
 
@@ -139,4 +154,16 @@ test('macOS webpack profile requires its own audited hash and exact 8/6 resource
   assert.throws(() => inspectOpenArchive(archiveFixture({ ...mac, sha: WEBPACK_PROFILE.sha256 })), /matched 8 times \(expected 7\)/);
   assert.throws(() => inspectOpenArchive(archiveFixture({ sha: MACOS_WEBPACK_PROFILE.sha256 })), /matched 7 times \(expected 8\)/);
   assert.throws(() => inspectOpenArchive(archiveFixture({ ...mac, requestCount: 7 })), /matched 7 times \(expected 6\)/);
+});
+
+test('audited 26.1111 Windows and Mac webpack profiles support the Ultrafast overlay', () => {
+  for (const profile of [WINDOWS_261111_WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE]) {
+    const archive = archiveFixture({ sha: profile.sha256, hookCount: 8, requestCount: 6 });
+    const plan = inspectOpenArchive(archive, { ultrafast: true });
+    assert.equal(plan.rendererProfile, profile.name ?? 'webpack-' + profile.version);
+    assert.equal(plan.ultrafast, true);
+    assert.equal(plan.resources.length, 14);
+    assert.ok(plan.resources.every(resource => resource.content.includes('{fast:!0,ultrafast:!0}')));
+    assert.throws(() => inspectOpenArchive(archiveFixture({ sha: profile.sha256 })), /expected 8/);
+  }
 });

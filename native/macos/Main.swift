@@ -2,13 +2,17 @@ import AppKit
 import Foundation
 
 struct BridgeHello: Decodable { let endpoint: String; let token: String }
-struct TestStats: Decodable { let inspections: Int; let launches: Int; let closes: Int; let forcedStops: Int }
+struct TestStats: Decodable {
+    let inspections: Int; let launches: Int; let closes: Int; let forcedStops: Int
+    let lastLaunchUltrafast: Bool
+}
 struct LauncherState: Decodable {
     let version: String
     let model: String
     let phase: String
     let status: String
     let detail: String
+    let showUltrafast: Bool
     let busy: Bool
     let compatible: Bool
     let externalRunning: Bool
@@ -62,11 +66,12 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let version = NSTextField(labelWithString: "—")
     let model = NSTextField(labelWithString: "未读取")
     let detail = NSTextField(wrappingLabelWithString: "")
-    let footer = NSTextField(labelWithString: "Standard / Fast · 保留现有连接与模型")
+    let footer = NSTextField(labelWithString: "档位在 Codex 菜单中选择")
     let dot = NSView()
     let primary = NSButton(title: "启动 Codex", target: nil, action: nil)
     let refresh = NSButton(title: "刷新状态", target: nil, action: nil)
     let quit = NSButton(title: "退出启动器", target: nil, action: nil)
+    let ultrafast = NSButton(checkboxWithTitle: "显示 Ultrafast", target: nil, action: nil)
     var backend: Process?
     var parentInput: Pipe?
     var privateOutput: Pipe?
@@ -168,6 +173,9 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
             cardStack.addArrangedSubview(row)
             row.widthAnchor.constraint(equalTo: cardStack.widthAnchor).isActive = true
         }
+        ultrafast.target = self; ultrafast.action = #selector(ultrafastClicked)
+        ultrafast.isEnabled = false; ultrafast.toolTip = "下次启动或重启 Codex 时生效"
+        stack.addArrangedSubview(ultrafast)
         for button in [primary, refresh, quit] {
             button.bezelStyle = .rounded; button.controlSize = .large
             button.font = .systemFont(ofSize: 13); button.target = self
@@ -282,10 +290,12 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         primary.isEnabled = !actionPending && !value.busy && value.compatible && (!value.externalRunning || value.managed)
         refresh.isEnabled = !actionPending && !value.busy && !value.managed
         quit.isEnabled = !actionPending && !value.busy
+        if !actionPending { ultrafast.state = value.showUltrafast ? .on : .off }
+        ultrafast.isEnabled = !actionPending && !value.busy && value.compatible
         quit.title = "退出启动器"
         if value.closed {
             if selfTestReport != nil, !testComplete {
-                let ok = testStep == 5 && value.selfTestStats?.closes == 3 && value.selfTestStats?.forcedStops == 0
+                let ok = testStep == 6 && value.selfTestStats?.closes == 3 && value.selfTestStats?.forcedStops == 0
                 testComplete = true
                 if ok { testChecks.append("quit-waits-for-controller-closed") }
                 writeTest(ok, error: ok ? nil : "Controller closed before the complete native-window scenario.")
@@ -297,8 +307,10 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func sendAction(_ action: String) {
         guard let url = bridge?.appendingPathComponent("action"), let auth = credential,
-              ["start", "restart", "refresh", "quit"].contains(action), !actionPending, !finishing else { return }
+              ["start", "restart", "refresh", "quit", "ultrafast-on", "ultrafast-off"].contains(action),
+              !actionPending, !finishing else { return }
         actionPending = true; primary.isEnabled = false; refresh.isEnabled = false; quit.isEnabled = false
+        ultrafast.isEnabled = false
         var request = URLRequest(url: url); request.httpMethod = "POST"
         request.setValue(auth, forHTTPHeaderField: "Authorization"); request.httpBody = Data(action.utf8)
         session.dataTask(with: request) { [weak self] _, response, error in DispatchQueue.main.async {
@@ -326,6 +338,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc func refreshClicked() { sendAction("refresh") }
     @objc func quitClicked() { requestQuit() }
+    @objc func ultrafastClicked() { sendAction(ultrafast.state == .on ? "ultrafast-on" : "ultrafast-off") }
     func requestQuit() {
         guard !finishing else { return }
         if connectionFailed { if state?.managed != true || confirm(false) { beginFinish() }; return }
@@ -344,6 +357,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func showFailure(_ text: String) {
         connectionFailed = true; status.stringValue = "启动器连接已中断"; detail.stringValue = text
         primary.isEnabled = false; refresh.isEnabled = false; quit.isEnabled = true; quit.title = "关闭窗口"
+        ultrafast.isEnabled = false
         dot.layer?.backgroundColor = NSColor.systemOrange.cgColor
         if selfTestReport != nil { failTest(text) }
     }
@@ -375,24 +389,32 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         switch testStep {
         case 0 where stats.inspections == 1:
             testProgress?.mark("test.ready")
-            guard primary.isEnabled, refresh.isEnabled, value.model == "gpt-6.1-sol", version.stringValue == "Mock 1.0", window.isVisible else { failTest("Native ready state did not render."); return }
+            guard primary.isEnabled, refresh.isEnabled, ultrafast.isEnabled, ultrafast.state == .off,
+                  value.model == "gpt-6.1-sol", version.stringValue == "Mock 1.0", window.isVisible else {
+                failTest("Native ready state did not render."); return
+            }
             testChecks.append("ready-state-and-window-visible"); testStep = 1; refresh.performClick(nil)
         case 1 where stats.inspections >= 2:
             testProgress?.mark("test.refresh")
-            testChecks.append("refresh-button-read-only"); testStep = 2; primary.performClick(nil)
-        case 2 where value.managed && stats.launches == 1:
+            testChecks.append("refresh-button-read-only"); testStep = 2; ultrafast.performClick(nil)
+        case 2 where value.showUltrafast:
+            guard ultrafast.state == .on else { failTest("The native Ultrafast option did not reflect controller state."); return }
+            testChecks.append("ultrafast-opt-in-reflects-controller-state"); testStep = 3; primary.performClick(nil)
+        case 3 where value.managed && stats.launches == 1:
             testProgress?.mark("test.cancel-and-restart")
+            guard stats.lastLaunchUltrafast else { failTest("The native Ultrafast choice was not used at launch."); return }
             confirmationOverride = false; primary.performClick(nil)
             let cancelledClose = !windowShouldClose(window)
             guard cancelledClose, !actionPending, window.isVisible else { failTest("Cancelled native close sent an action."); return }
-            testChecks.append("cancel-restart-and-close-retains-session"); testStep = 3
+            testChecks.append("cancel-restart-and-close-retains-session"); testStep = 4
             confirmationOverride = true; primary.performClick(nil)
-        case 3 where value.phase == "error" && stats.closes == 1:
+        case 4 where value.phase == "error" && stats.closes == 1:
             testProgress?.mark("test.graceful-timeout")
             guard value.managed, window.isVisible, primary.isEnabled, quit.isEnabled, stats.launches == 1 else { failTest("Quit timeout did not retain the native window and session."); return }
-            testChecks.append("graceful-timeout-keeps-window-and-session"); testStep = 4; primary.performClick(nil)
-        case 4 where value.managed && stats.launches == 2 && stats.closes == 2:
+            testChecks.append("graceful-timeout-keeps-window-and-session"); testStep = 5; primary.performClick(nil)
+        case 5 where value.managed && stats.launches == 2 && stats.closes == 2:
             testProgress?.mark("test.restart-recovered")
+            guard stats.lastLaunchUltrafast else { failTest("Restart did not keep the native Ultrafast choice."); return }
             testChecks.append("restart-retry-starts-new-owned-session")
             do {
                 try screenshot()
@@ -411,7 +433,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 guard gap >= 8 else { failTest("Long detail overlaps the native window footer."); return }
                 testChecks.append("long-detail-does-not-overlap-footer")
             } catch { failTest("Could not capture the native window."); return }
-            testStep = 5; quit.performClick(nil)
+            testStep = 6; quit.performClick(nil)
         default: break
         }
     }

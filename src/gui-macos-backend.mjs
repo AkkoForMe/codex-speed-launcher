@@ -6,14 +6,15 @@ import { startGuiBridge } from './gui.mjs';
 // Test mode is an explicit executable argument. It never reads a user's Codex
 // installation, home directory, credentials, or configuration.
 export function createMacSelfTestController() {
-  const stats = { inspections: 0, launches: 0, closes: 0, forcedStops: 0 };
+  const stats = { inspections: 0, launches: 0, closes: 0, forcedStops: 0, lastLaunchUltrafast: false };
   const controller = createGuiController({ system: {
     discover: async () => { stats.inspections++; return { version: 'Mock 1.0', asarPath: 'mock-only' }; },
     inspect: () => ({ requiredIds: ['mock'] }), processes: async () => [],
     readConfig: async () => 'model="gpt-6.1-sol"',
     sleep: async () => {},
-    launch: async () => {
+    launch: async ({ ultrafast }) => {
       stats.launches++;
+      stats.lastLaunchUltrafast = ultrafast;
       let exit;
       const exited = new Promise(resolveExit => { exit = resolveExit; });
       return {

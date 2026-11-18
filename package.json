@@ -1,9 +1,9 @@
 {
   "name": "codex-speed-launcher",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
-  "description": "Portable native Fast menu launcher for Codex Desktop using custom API providers.",
+  "description": "Portable native speed menu launcher for Codex Desktop using custom API providers.",
   "engines": { "node": ">=22" },
   "scripts": {
     "test": "node --test",

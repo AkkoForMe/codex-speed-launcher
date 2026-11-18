@@ -11,7 +11,8 @@ Windows x64 可使用单个 `.exe` 启动 Codex Speed Launcher，无需另装 No
 | 单文件 `.exe` | 双击打开小窗，也可通过命令参数检查和诊断 | 已提供 Windows x64 构建脚本 |
 | `.zip` | 压缩下载体积，放入教程、许可证或完整源码 | 现有便携包和源码包仍可使用 |
 | 安装包／托盘应用 | 开始菜单快捷方式、托盘状态、升级和卸载 | 后续产品形态，当前未实现 |
-| macOS `.app`／`.dmg` | 面向 Mac 的常见双击入口和分发方式 | 需要 Mac 构建与真机验收，当前未实现 |
+| macOS `.app` | 双击打开 Mac 原生小窗 | 提供 Apple 芯片与 Intel 应用包，见 [Mac 简约小窗](macos-window.md) |
+| macOS `.dmg` | 磁盘映像分发 | 当前未提供；使用发布页的 `-app.zip` 应用包 |
 
 EXE 是程序文件，ZIP 是归档格式，二者可以一起使用。例如，可在发布页同时提供直接下载的 `.exe`，以及装有该 EXE 和说明文档的 ZIP。
 
@@ -62,7 +63,7 @@ SEA 数据使用构建目录中的相对文件名，避免把维护者的绝对�
 
 后续可以在注入完成后对最终 EXE 签名。代码签名、安装包和托盘界面是独立工作，打成 EXE 不会自动提供这些能力。
 
-Node.js `24.22.2` 的 SEA 文档将该功能标为「Active development」，并说明 macOS x64 尚未纳入支持测试。当前构建脚本只生成 Windows x64 EXE；macOS 继续使用既有实验便携包。Mac 的 `.app`／`.dmg` 还需要真机上的签名、启动与原生菜单验证。
+Node.js `24.22.2` 的 SEA 文档将该功能标为「Active development」，并说明 macOS x64 尚未纳入支持测试。本文的 SEA 构建脚本只生成 Windows x64 EXE。macOS 使用独立的 Swift AppKit `.app` 构建并附带 Node.js 运行时，不依赖 SEA；Apple 芯片和 Intel 应用包已发布，备用终端脚本包继续保留。Mac 应用包、签名与原生窗口模拟检查已通过，真实 Codex 菜单与请求仍需实机核对，详见 [Mac 简约小窗](macos-window.md)。
 
 ## 依据
 

@@ -5,7 +5,7 @@ import { inspectWebpackSource, patchWebpackSource, WEBPACK_PROFILES } from './we
 
 // Kept separate from file opening so archive contracts can be checked against
 // handwritten fixtures. The live path always uses the read-only ASAR reader.
-export function inspectOpenArchive(archive, { checkSyntax = true } = {}) {
+export function inspectOpenArchive(archive, { checkSyntax = true, ultrafast = false } = {}) {
   const fingerprint = archive.fingerprint();
   const webpack = WEBPACK_PROFILES.find(profile => fingerprint.sha256 === profile.sha256);
   const expectedCounts = webpack ? webpack.counts : Object.fromEntries(REQUIRED_IDS.map(id => [id, 1]));
@@ -15,13 +15,13 @@ export function inspectOpenArchive(archive, { checkSyntax = true } = {}) {
   for (const entry of archive.files) {
     if (!allowedPath.test(entry.path)) continue;
     const source = archive.read(entry).toString('utf8');
-    const found = webpack ? inspectWebpackSource(source) : inspectSource(entry.path, source);
+    const found = webpack ? inspectWebpackSource(source, { ultrafast }) : inspectSource(entry.path, source, { ultrafast });
     if (!found.length) continue;
     for (const item of found) {
       if (!matches.has(item.id)) throw new Error(`Unknown patch id: ${item.id}`);
       for (let i = 0; i < item.count; i++) matches.get(item.id).push(entry.path);
     }
-    const patched = webpack ? patchWebpackSource(source) : patchSource(entry.path, source);
+    const patched = webpack ? patchWebpackSource(source, { ultrafast }) : patchSource(entry.path, source, { ultrafast });
     if (!patched.ids.length || patched.content === source) throw new Error(`No replacement for ${entry.path}.`);
     if (checkSyntax) {
       try { assertModuleSyntax(patched.content); }
@@ -42,7 +42,7 @@ export function inspectOpenArchive(archive, { checkSyntax = true } = {}) {
   }
   const finalFingerprint = archive.fingerprint();
   if (finalFingerprint.sha256 !== fingerprint.sha256) throw new Error('Codex changed during inspection. App unchanged.');
-  return { ...finalFingerprint, resources, requiredIds: [...REQUIRED_IDS],
+  return { ...finalFingerprint, resources, requiredIds: [...REQUIRED_IDS], ultrafast,
     rendererProfile: webpack ? (webpack.name ?? `webpack-${webpack.version}`) : 'service-tier-26.1023' };
 }
 
@@ -58,6 +58,7 @@ export function publicInspection(app, plan) {
     asarPath: app.asarPath, asarSha256: plan.sha256,
     compatibility: 'signature-compatible',
     rendererProfile: plan.rendererProfile,
+    ultrafast: plan.ultrafast,
     macOSStatus: app.platform === 'darwin' ? 'experimental; full Codex Desktop/request validation not completed' : undefined,
     patches: plan.resources.map(({ archivePath, ids, labels, sourceHash, patchedHash }) => ({ archivePath, ids, labels, sourceHash, patchedHash }))
   };

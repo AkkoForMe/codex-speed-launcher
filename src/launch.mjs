@@ -19,11 +19,11 @@ export function assertArchiveUnchanged(app, plan) {
   } finally { archive.close(); }
 }
 
-export async function launchSession({ app: supplied, appPath, isolatedDir, codexHome, env, signal, log = () => {} } = {}) {
+export async function launchSession({ app: supplied, appPath, isolatedDir, codexHome, env, ultrafast = false, signal, log = () => {} } = {}) {
   const app = supplied ?? await discoverApp({ appPath });
   if (!isolatedDir) await assertAppIdle(app);
   log(`Inspecting Codex ${app.version} (${app.platform})...`);
-  const plan = inspectArchive(app.asarPath);
+  const plan = inspectArchive(app.asarPath, { ultrafast });
   signal?.throwIfAborted();
   const port = await availablePort();
   assertArchiveUnchanged(app, plan);
@@ -48,7 +48,7 @@ export async function runLauncher(options = {}) {
   let session;
   try {
     session = await launchSession({ ...options, log, signal: controller.signal });
-    log('Native Fast controls and request tier are active.');
+    log(options.ultrafast ? 'Native speed controls are enabled, including advertised Ultrafast tiers.' : 'Native Fast controls and request tier are active.');
     log('Keep this launcher open. Quit Codex to finish. Ctrl+C closes this launched Codex session.');
     const outcome = await Promise.race([
       session.child.waitForExit().then(code => ({ type: 'exit', code })),

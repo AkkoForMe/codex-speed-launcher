@@ -36,7 +36,7 @@ export function createGuiController(options = {}) {
   const requestedQuits = new WeakSet();
   let state = { title: 'Codex Speed Launcher', version: '—', model: '未读取',
     phase: 'checking', status: '正在检查 Codex…', detail: '', busy: true,
-    compatible: false, externalRunning: false, managed: false, closed: false };
+    showUltrafast: false, compatible: false, externalRunning: false, managed: false, closed: false };
   const snapshot = () => ({ ...state });
   const update = fields => { state = { ...state, ...fields }; options.onState?.(snapshot()); };
   const idle = fields => update({ busy: false, ...fields });
@@ -51,7 +51,7 @@ export function createGuiController(options = {}) {
       if (!plan) throw new Error('Compatibility inspection returned no patch plan.');
       idle({ version: app.version, model, compatible: true, externalRunning: processes.length > 0,
         phase: 'ready', status: processes.length ? '请先退出正在运行的 Codex' : '已就绪',
-        detail: processes.length ? '保存工作并从 Codex 菜单退出，再点击刷新。' : '启动后，在 Codex 原生菜单选择 Standard / Fast。' });
+        detail: processes.length ? '保存工作并从 Codex 菜单退出，再点击刷新。' : '启动后，在 Codex 速度菜单选档。' });
     } catch (error) {
       idle({ phase: 'error', status: '兼容性检查未通过', compatible: false, detail: safeGuiError(error) });
     }
@@ -100,10 +100,11 @@ export function createGuiController(options = {}) {
     // A provider switcher may have updated the model since this window opened.
     update({ model: await io.readConfig().then(configuredModel, () => '未读取') });
     const owned = await io.launch({ app, appPath: options.appPath,
-      ...(options.launchOptions ?? {}), log: () => {} });
+      ...(options.launchOptions ?? {}), ultrafast: state.showUltrafast, log: () => {} });
     session = owned;
     idle({ managed: true, externalRunning: false, phase: 'running', status: '速度菜单已启用',
-      detail: '在 Codex 原生菜单选择 Standard / Fast。费用以服务端为准。' });
+      detail: state.showUltrafast ? '在 Codex 速度菜单查看当前模型支持的档位。费用以中转结算为准。'
+        : '在 Codex 速度菜单选择 Standard 或 Fast。' });
     watch(owned);
   }
 
@@ -142,9 +143,14 @@ export function createGuiController(options = {}) {
     snapshot,
     async initialize() { await inspect(); return snapshot(); },
     dispatch(action) {
-      if (!['refresh', 'start', 'restart', 'quit'].includes(action)) throw new Error('未知操作。');
       if (disposed || state.closed) throw new Error('启动器已退出。');
       if (operation || state.busy) throw new Error('正在处理，请稍候。');
+      if (action === 'ultrafast-on' || action === 'ultrafast-off') {
+        if (!state.compatible) throw new Error('请先完成兼容性检查。');
+        update({ showUltrafast: action === 'ultrafast-on' });
+        return Promise.resolve();
+      }
+      if (!['refresh', 'start', 'restart', 'quit'].includes(action)) throw new Error('未知操作。');
       if (session && ['refresh', 'start'].includes(action)) throw new Error('本次 Codex 已在运行。');
       update({ busy: true });
       operation = perform(action).catch(error => {

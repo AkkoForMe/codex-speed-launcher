@@ -6,12 +6,14 @@
 
 [下载发行版](https://github.com/AkkoForMe/codex-speed-launcher/releases) · [问题反馈](https://github.com/AkkoForMe/codex-speed-launcher/issues)
 
+本文适用于 [v0.2.2](https://github.com/AkkoForMe/codex-speed-launcher/releases/tag/v0.2.2) 预发布版，提供 Windows x64 EXE、Apple 芯片与 Intel Mac 的 `.app` 简约小窗。
+
 ## 当前验证范围
 
 | 平台 | 状态 |
 | --- | --- |
-| Windows x64 | `OpenAI.Codex 26.1023.6621.0` 和 `26.1106.6628.0` 的隔离桌面与本地模拟请求验收通过，覆盖同一聊天的 Standard → Fast → Standard。新版 webpack 适配仅接受已核验的归档指纹。 |
-| macOS Apple 芯片／Intel | 原生 AppKit 简约小窗；`26.1111.21308` 官方 Mac 归档只读预检通过。两种架构分别构建和验证 `.app`；Codex 菜单与真实请求仍需在本机核对。 |
+| Windows x64 | `26.1023.6621.0`、`26.1106.6628.0` 和 `26.1111.2228.0` 通过 Standard → Fast → Standard 隔离验证。`26.1111.2228.0` 另已验证 GPT‑6.2 Astra 和 GPT‑6.2 Sol 的 Ultrafast 档位。 |
+| macOS Apple 芯片／Intel | 已核验 `26.1111.21308` 的官方 Mac 归档。发布流程在对应架构的 Mac 上验收 AppKit 小窗。官方 Codex 的原生速度菜单与出站请求待实机验收。 |
 
 Codex 更新后，启动器会重新检查资源和补丁位置。检查失败时停止启动，不应把未知版本当作已支持版本。
 
@@ -23,11 +25,17 @@ Codex 更新后，启动器会重新检查资源和补丁位置。检查失败�
 2. 配置自己的中转地址、Key 和模型，先确认普通模式可以正常请求。
 3. 确认中转和上游支持所选速度档位。中转需要保留 `service_tier` 参数；过滤规则会让客户端开关无法传递到上游。
 
-启动器不附带账号或 Key，不会替其他人配置服务器。Fast 的可用性和计费由实际使用的中转及上游决定。
+速度档位的可用性和计费由实际使用的中转及上游决定。
+
+## 显示 Ultrafast
+
+在启动器小窗勾选「显示 Ultrafast」，启动或重启 Codex 后，在原生速度菜单选择档位。Ultrafast 在已验收的简体中文 Codex 菜单中显示为「超快」。开关默认关闭，当前小窗中会保留勾选状态。命令行可用 `node src/cli.mjs launch --ultrafast`。
+
+使用 API Key 或自定义供应商时，Codex 需要从当前模型目录读到 `ultrafast` 档位。供应商可通过 Codex 的 `model_catalog_url` 配置提供该目录。
 
 ## Windows
 
-Windows 现提供「简约小窗」：显示兼容性状态、Codex 版本和配置模型，可点击启动、重启与退出。Standard／Fast 继续在 Codex 原生菜单中选择。小窗操作说明与状态含义见 [简约小窗](docs/compact-window.md)。源码或便携包可运行 `node src/cli.mjs gui`，原有控制台入口继续保留。
+Windows「简约小窗」显示兼容性状态、Codex 版本和配置模型，提供启动、重启与退出操作。源码或便携包可运行 `node src/cli.mjs gui`。见 [简约小窗](docs/compact-window.md)。
 
 推荐使用单文件 `codex-speed-launcher-<版本>-windows-x64.exe`。双击 EXE 会打开简约小窗；先等待兼容性检查完成，再保存工作并按小窗提示启动 Codex。无需安装 Node.js。
 
@@ -53,7 +61,7 @@ Windows 现提供「简约小窗」：显示兼容性状态、Codex 版本和配
 
 推荐下载 Apple 芯片版 `darwin-arm64-app.zip` 或 Intel 版 `darwin-x64-app.zip`。解压后，将 `Codex Speed Launcher.app` 放到「应用程序」或其他固定目录，再双击打开。无需安装 Node.js，也无需保持终端窗口运行。支持 macOS 13.5 或更新版本。
 
-小窗与 Windows 提供相同的信息和操作：兼容性状态、Codex 版本、配置模型，以及启动、重启、刷新和退出。Standard／Fast 仍在 Codex 原生菜单选择。重启和退出只管理本工具启动的 Codex，操作前会确认；已有其他入口启动的 Codex 需要先自行正常退出。
+小窗与 Windows 提供相同的信息和操作。重启和退出只管理本工具启动的 Codex，操作前会确认。已有其他入口启动的 Codex 需要先自行正常退出。
 
 当前 Mac 应用使用 ad-hoc 签名校验包完整性，没有 Developer ID 签名或 Apple 公证。首次打开若被系统阻止，先核对下载来源和 SHA-256，再在 Finder 使用「打开」或系统「隐私与安全性」提供的打开操作；不要关闭系统安全保护。小窗行为和验证边界见 [Mac 简约小窗](docs/macos-window.md)。
 
@@ -61,7 +69,7 @@ Windows 现提供「简约小窗」：显示兼容性状态、Codex 版本和配
 
 Apple 芯片使用 `darwin-arm64.zip`，Intel Mac 使用 `darwin-x64.zip`；它们保留原有终端入口供排错。
 
-macOS 版仍通过终端脚本启动，暂不包含 Windows 的简约小窗。发布流程会在 Apple 芯片与 Intel 架构的 macOS 运行器上核对包完整性、执行权限、自带运行时与脚本入口；这不代表已完成真实 Codex 桌面的菜单和请求验收。
+备用脚本包通过终端启动，不包含图形小窗；需要小窗时下载上方带 `-app.zip` 后缀的应用包。发布流程会在 Apple 芯片与 Intel 架构的 macOS 运行器上核对脚本包完整性、执行权限、自带运行时与脚本入口；这不代表已完成真实 Codex 桌面的菜单和请求验收。
 
 1. 解压完整的包。
 2. 双击 `inspect-macos.command`，先检查本机应用是否兼容。
@@ -73,14 +81,15 @@ macOS 版仍通过终端脚本启动，暂不包含 Windows 的简约小窗。�
 
 ## 如何确认生效
 
-看到 Fast 图标只能证明菜单可见。还需要检查一条新请求的实际档位：
+在同一模型和同一 Key 下，逐个档位发送一条小请求。
 
 1. 选择 Standard，发送一条小请求。
 2. 选择 Fast，发送另一条小请求。
-3. 在中转的用量或费用详情中查看服务档位，并在有权限时核对上游返回的档位。
-4. 再切回 Standard，确认后续请求恢复普通档位。
+3. 如果菜单提供 Ultrafast，切到 Ultrafast 并发送一条请求。
+4. 切回 Standard 并发送一条请求。
+5. 在中转的用量或费用详情中核对档位，并在有权限时核对上游返回的档位。
 
-两次请求继续使用同一 Key 和同一模型。Fast 请求通过 `service_tier` 传递；服务端仍可能拒绝或降级，实际记录才是判断依据。本工具当前只适配 Standard／Fast，不新增 Ultrafast 入口。
+Fast 对应 `service_tier: "priority"`，Ultrafast 对应 `service_tier: "ultrafast"`。服务端可能拒绝或降级，实际档位以服务端记录为准。
 
 Fast 图标和请求参数均不能证明整段任务一定更快。推理、工具执行、网络和中转等待都会影响耗时。比较速度时，保持模型、推理强度、输入长度和输出要求一致，交错执行多轮，记录首字时间、总耗时、输出 token 数和上游实际档位；仅靠短回答的体感难以判断差异。详见 [速度验证](docs/speed-verification.md)。
 
@@ -109,4 +118,4 @@ node --test
 
 分发包仅包含启动器、文档、许可证和经过校验的 Node.js 运行时，不包含 Codex 程序、个人配置或会话。生成方式见 [分发说明](docs/distribution.md)，参考来源见 [第三方说明](THIRD_PARTY_NOTICES.md)。
 
-开源仓库与 Release 的组织方式见 [开源与发布](docs/open-source-release.md)，Ultrafast 的当前研究状态见 [Ultrafast 研究](docs/ultrafast-research.md)。
+开源仓库与 Release 的组织方式见 [开源与发布](docs/open-source-release.md)。模型目录和客户端档位的验证细节见 [Ultrafast 研究](docs/ultrafast-research.md)。

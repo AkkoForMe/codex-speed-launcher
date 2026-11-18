@@ -20,7 +20,7 @@ function normalize(requirements) {
   };
 }
 
-function harness({ authMethod = 'apikey', isLoading = false, pending = false, requirements = {} } = {}, patched = true) {
+function harness({ authMethod = 'apikey', isLoading = false, pending = false, requirements = {}, ultrafast = false } = {}, patched = true) {
   const calls = [];
   const cache = [];
   const context = vm.createContext({
@@ -32,7 +32,7 @@ function harness({ authMethod = 'apikey', isLoading = false, pending = false, re
     requirementsQuery: {},
     normalize,
   });
-  vm.runInContext(patched ? patchSource(PATH, SOURCE).content : SOURCE, context);
+  vm.runInContext(patched ? patchSource(PATH, SOURCE, { ultrafast }).content : SOURCE, context);
   const store = { query: { setData: (...args) => calls.push(args) } };
   return {
     access: () => context.hook('local'),
@@ -78,6 +78,23 @@ test('API key receives native Fast access from both paths without a managed-auth
   assert.equal(fixed.access().serviceTierAccess.ultrafast, false);
   assert.equal((await fixed.requestAccess()).fast, true);
   assert.deepEqual(fixed.calls, []);
+});
+
+test('Ultrafast opt-in reaches both access paths without changing managed requirements', async () => {
+  const enabled = { ultrafast: true };
+  const patched = patchSource(PATH, SOURCE, enabled).content;
+  assert.equal(patchSource(PATH, patched, enabled).content, patched);
+  assert.throws(() => patchSource(PATH, patched), /Ambiguous/);
+  for (const authMethod of ['apikey', null]) {
+    const fixed = harness({ authMethod, ...enabled });
+    assert.equal(fixed.access().serviceTierAccess.ultrafast, true);
+    assert.equal((await fixed.requestAccess()).ultrafast, true);
+    assert.deepEqual(fixed.calls, []);
+  }
+  const denied = { requirements: { featureRequirements: { ultrafast_mode: false } } };
+  const managed = harness({ authMethod: 'chatgpt', requirements: denied, ...enabled });
+  assert.equal(managed.access().serviceTierAccess.ultrafast, false);
+  assert.equal((await managed.requestAccess()).ultrafast, false);
 });
 
 test('null auth used by a custom provider gets Fast access but unrecognized auth does not', async () => {

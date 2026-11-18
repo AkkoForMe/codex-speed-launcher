@@ -7,7 +7,7 @@
  */
 
 const ID = '[A-Za-z_$][\\w$]*';
-const KEY_ACCESS = '{fast:!0,ultrafast:!1}';
+export const apiKeySpeedAccess = ultrafast => `{fast:!0,ultrafast:${ultrafast ? '!0' : '!1'}}`;
 const marker = (id) => `/*codex-speed-launcher:${id}*/`;
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const expression = (source) => new RegExp(source, 'g');
@@ -39,11 +39,11 @@ const hookGuard = hookContext + hookDependencies +
   `\\k<eligible>&&!\\k<loading>&&\\k<data>!=null\\?` +
   `(?<normalize>${ID})\\(\\k<data>\\):null` + hookTail;
 
-const hookPatched = hookContext + hookPatchedDependencies +
+const hookPatched = access => hookContext + hookPatchedDependencies +
   escapeRegExp(marker('api-key-service-tier-access')) +
   `\\(!\\k<loading>&&\\(\\k<account>\\?\\.authMethod==null\\|\\|` +
   `\\k<account>\\.authMethod===\u0060apikey\u0060\\)\\?` +
-  escapeRegExp(KEY_ACCESS) +
+  escapeRegExp(access) +
   `:\\k<eligible>&&!\\k<loading>&&\\k<data>!=null\\?` +
   `(?<normalize>${ID})\\(\\k<data>\\):null\\)` + hookPatchedTail;
 
@@ -66,7 +66,7 @@ const targets = [
     needle: 'serviceTierAccess:',
     guarded: hookGuard,
     patched: hookPatched,
-    replace(g) {
+    replace(g, access) {
       // The original dependency used only "managed auth or not". The new
       // expression distinguishes API keys from other non-managed auth modes;
       // use the auth method in that same cache slot to avoid a stale result
@@ -74,7 +74,7 @@ const targets = [
       return `${g.prefix}${g.cache}[3]!==${g.data}||${g.cache}[4]!==${g.loading}||` +
         `${g.cache}[5]!==(${g.account}?.authMethod??null)?(${g.result}=${marker(this.id)}(!${g.loading}&&` +
         `(${g.account}?.authMethod==null||${g.account}.authMethod===\u0060apikey\u0060)` +
-        `?${KEY_ACCESS}:${g.eligible}&&!${g.loading}&&${g.data}!=null?` +
+        `?${access}:${g.eligible}&&!${g.loading}&&${g.data}!=null?` +
         `${g.normalize}(${g.data}):null),${g.cache}[3]=${g.data},${g.cache}[4]=${g.loading},` +
         `${g.cache}[5]=(${g.account}?.authMethod??null),${g.cache}[6]=${g.result}):` +
         `${g.result}=${g.cache}[6]`;
@@ -85,12 +85,12 @@ const targets = [
     label: 'API key request service tier',
     needle: 'Failed to read service tier for request',
     guarded: requestPrefix + requestBody,
-    patched: requestPrefix + escapeRegExp(marker('api-key-request-tier-access')) +
+    patched: access => requestPrefix + escapeRegExp(marker('api-key-request-tier-access')) +
       `if\\(\\k<auth>==null\\|\\|\\k<auth>===\u0060apikey\u0060\\)return ` +
-      escapeRegExp(KEY_ACCESS) + `;` + requestBody,
-    replace(g) {
+      escapeRegExp(access) + `;` + requestBody,
+    replace(g, access) {
       return `${g.prefix}${marker(this.id)}if(${g.auth}==null||${g.auth}===\u0060apikey\u0060)` +
-        `return ${KEY_ACCESS};if(${g.auth}!==\u0060chatgpt\u0060&&` +
+        `return ${access};if(${g.auth}!==\u0060chatgpt\u0060&&` +
         `${g.auth}!==\u0060personalAccessToken\u0060&&${g.auth}!==\u0060amazonBedrock\u0060)` +
         `return null;let ${g.data}=await ${g.read}(${g.store},${g.host},` +
         `{priority:\u0060critical\u0060});return ${g.store}.query.setData(${g.query},` +
@@ -109,10 +109,10 @@ function eligibleResource(path) {
   return /(?:^|\/)(?:webview\/)?assets\/[^/?#]+\.js(?:[?#].*)?$/.test(pathText);
 }
 
-function inspectTarget(target, source) {
+function inspectTarget(target, source, access) {
   if (!source.includes(target.needle)) return null;
   const guardedCount = [...source.matchAll(expression(target.guarded))].length;
-  const patchedCount = [...source.matchAll(expression(target.patched))].length;
+  const patchedCount = [...source.matchAll(expression(target.patched(access)))].length;
   const count = guardedCount + patchedCount;
   const markerCount = source.split(marker(target.id)).length - 1;
   if (count === 0 && markerCount === 0) return null;
@@ -128,22 +128,24 @@ function inspectTarget(target, source) {
 }
 
 /** Return local match counts. The caller must sum each id across the archive. */
-export function inspectSource(path, source) {
+export function inspectSource(path, source, { ultrafast = false } = {}) {
   if (!eligibleResource(path)) return [];
-  return targets.map((target) => inspectTarget(target, source)).filter(Boolean);
+  const access = apiKeySpeedAccess(ultrafast);
+  return targets.map(target => inspectTarget(target, source, access)).filter(Boolean);
 }
 
 /** Patch only unambiguous complete signatures in a renderer JavaScript body. */
-export function patchSource(path, source) {
-  const matches = inspectSource(path, source);
+export function patchSource(path, source, { ultrafast = false } = {}) {
+  const access = apiKeySpeedAccess(ultrafast);
+  const matches = inspectSource(path, source, { ultrafast });
   const ambiguous = matches.find(({ count, state }) => count !== 1 || state === 'ambiguous');
   if (ambiguous) throw new Error(`Ambiguous speed signature: ${ambiguous.id}`);
   let content = source;
   const appliedIds = [];
   for (const target of targets) {
     if (!matches.some(({ id, state }) => id === target.id && state === 'guarded')) continue;
-    content = content.replace(expression(target.guarded), (...args) => target.replace(args.at(-1)));
-    const after = inspectTarget(target, content);
+    content = content.replace(expression(target.guarded), (...args) => target.replace(args.at(-1), access));
+    const after = inspectTarget(target, content, access);
     if (after?.count !== 1 || after?.state !== 'patched') {
       throw new Error(`Speed replacement verification failed: ${target.id}`);
     }

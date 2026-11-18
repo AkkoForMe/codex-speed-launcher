@@ -2,19 +2,21 @@
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import metadata from '../package.json' with { type: 'json' };
 import { discoverApp } from './platform.mjs';
 import { inspectArchive, publicInspection } from './preflight.mjs';
 import { runLauncher } from './launch.mjs';
 
-const help = `Codex Speed Launcher 0.2.1
+const help = `Codex Speed Launcher ${metadata.version}
 
-  inspect [--app PATH] [--json]   Read-only compatibility check
-  launch  [--app PATH]            Start native Fast controls using your existing config
+  inspect [--app PATH] [--json] [--ultrafast]  Read-only compatibility check
+  launch  [--app PATH] [--ultrafast]           Start native speed controls using your existing config
   gui     [--app PATH]            Open the compact Windows or built macOS launcher window
   verify  [--app PATH] [--json]    Isolated local mock test; no real API key or usage
 
 Windows x64: tested builds are listed in README.md.
 macOS: experimental; requires matching renderer signatures and official app signing.
+Use --ultrafast to allow selection in Codex when the provider's model catalog advertises it.
 This launcher preserves config.toml, auth.json, models, and provider URLs.
 Fully quit Codex before normal launch. No running app is automatically stopped.
 `;
@@ -23,20 +25,21 @@ export async function main(args = process.argv.slice(2)) {
   const { values, positionals } = parseArgs({ args, allowPositionals: true, options: {
     app: { type: 'string' }, json: { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h' }, version: { type: 'boolean' },
-    artifacts: { type: 'string' }
+    artifacts: { type: 'string' }, ultrafast: { type: 'boolean', default: false },
   } });
-  if (values.version) { console.log('0.2.1'); return 0; }
+  if (values.version) { console.log(metadata.version); return 0; }
   if (values.help || !positionals.length) { console.log(help); return 0; }
   const [command, ...rest] = positionals;
   if (rest.length || !['inspect', 'launch', 'verify', 'gui', 'window'].includes(command)) throw new Error('Unknown command. Use --help.');
   if (command === 'gui' || command === 'window') {
+    if (values.ultrafast) throw new Error('Use the Ultrafast checkbox in the launcher window.');
     if (values.json || values.artifacts) throw new Error('The GUI does not support --json or --artifacts.');
     const { runGui } = await import('./gui.mjs');
     return runGui({ appPath: values.app });
   }
   if (command === 'inspect') {
     const app = await discoverApp({ appPath: values.app });
-    const result = publicInspection(app, inspectArchive(app.asarPath));
+    const result = publicInspection(app, inspectArchive(app.asarPath, { ultrafast: values.ultrafast }));
     if (values.json) console.log(JSON.stringify(result, null, 2));
     else {
       console.log(`Codex ${result.version} (${result.platform}): signature-compatible`);
@@ -47,6 +50,7 @@ export async function main(args = process.argv.slice(2)) {
     return 0;
   }
   if (command === 'verify') {
+    if (values.ultrafast) throw new Error('The verify command runs the Standard and Fast checks.');
     const { verifyInstalledApp } = await import('./verify.mjs');
     const report = await verifyInstalledApp({ appPath: values.app, artifacts: values.artifacts,
       log: values.json ? () => {} : console.log });
@@ -54,7 +58,7 @@ export async function main(args = process.argv.slice(2)) {
     return report.ok ? 0 : 1;
   }
   if (values.json) throw new Error('--json is supported by inspect and verify only.');
-  return runLauncher({ appPath: values.app });
+  return runLauncher({ appPath: values.app, ultrafast: values.ultrafast });
 }
 
 // Kept importable for source and package tests.

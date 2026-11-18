@@ -15,6 +15,8 @@ test('macOS native mock runs the real controller with graceful timeout and recov
   assert.equal(controller.snapshot().selfTestStats.inspections, 2);
   await controller.dispatch('start');
   assert.equal(controller.snapshot().selfTestStats.launches, 1);
+  assert.equal(controller.snapshot().selfTestStats.lastLaunchUltrafast, false);
+  await controller.dispatch('ultrafast-on');
   await controller.dispatch('restart');
   assert.equal(controller.snapshot().managed, true);
   assert.equal(controller.snapshot().selfTestStats.forcedStops, 0);
@@ -24,7 +26,8 @@ test('macOS native mock runs the real controller with graceful timeout and recov
   assert.equal(controller.snapshot().selfTestStats.launches, 2);
   await controller.dispatch('quit');
   assert.equal(controller.snapshot().closed, true);
-  assert.deepEqual(controller.snapshot().selfTestStats, { inspections: 2, launches: 2, closes: 3, forcedStops: 0 });
+  assert.deepEqual(controller.snapshot().selfTestStats,
+    { inspections: 2, launches: 2, closes: 3, forcedStops: 0, lastLaunchUltrafast: true });
 });
 
 test('macOS backend privately hands off loopback credentials and preserves the normal bridge authorization', async () => {
@@ -86,6 +89,9 @@ test('the standalone macOS backend exits after a normal native parent pipe close
   };
   let state = await waitState(state => !state.busy);
   assert.equal(state.compatible, true);
+  assert.equal(state.showUltrafast, false);
+  await action('ultrafast-on');
+  await waitState(state => state.showUltrafast);
   await action('start');
   await waitState(state => state.managed && !state.busy);
   await action('restart');
@@ -96,7 +102,7 @@ test('the standalone macOS backend exits after a normal native parent pipe close
   await action('quit');
   state = await waitState(state => state.closed);
   assert.equal(state.closed, true);
-  assert.deepEqual(state.selfTestStats, { inspections: 1, launches: 2, closes: 3, forcedStops: 0 });
+  assert.deepEqual(state.selfTestStats, { inspections: 1, launches: 2, closes: 3, forcedStops: 0, lastLaunchUltrafast: true });
   child.stdin.end();
   const [code, signal] = await exited;
   assert.equal(code, 0);

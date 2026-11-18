@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { access, readFile } from 'node:fs/promises';
 import { isAbsolute, join, posix, win32 } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+import metadata from '../package.json' with { type: 'json' };
 
 const MODEL = 'gpt-6.1-sol';
 const MARKER = 'SPEED_TEST_OK';
@@ -182,7 +183,7 @@ export async function verifyBackend(app, {
   try {
     log('Checking the bundled Codex core against the local dummy relay.');
     const initialized = await rpc.request('initialize', {
-      clientInfo: { name: 'codex_desktop', title: 'Codex Speed Launcher local verification', version: '0.2.1' },
+      clientInfo: { name: 'codex_desktop', title: 'Codex Speed Launcher local verification', version: metadata.version },
       capabilities: { experimentalApi: true },
     });
     rpc.write({ jsonrpc: '2.0', method: 'initialized' });

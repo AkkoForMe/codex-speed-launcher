@@ -11,14 +11,15 @@ import { windowsGuiScript } from '../src/gui-window.mjs';
 
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 function fixture(overrides = {}) {
-  const records = { launch: 0, close: 0, stop: 0, cleanup: 0, sessions: [] };
+  const records = { launch: 0, close: 0, stop: 0, cleanup: 0, sessions: [], ultrafast: [] };
   const system = {
     discover: async () => ({ version: '26.1106.6628.0', asarPath: 'fixture' }),
     inspect: () => ({ requiredIds: ['one'] }), processes: async () => [],
     readConfig: async () => 'model="gpt-6.1-sol"\n[model_providers.secret]\napi_key="sk-never-display"',
     sleep: () => new Promise(() => {}),
-    launch: async () => {
+    launch: async ({ ultrafast }) => {
       records.launch++;
+      records.ultrafast.push(ultrafast);
       const exit = deferred(), lost = deferred();
       const session = { exit, lost,
         child: { waitForExit: () => exit.promise, stop: async () => { records.stop++; exit.resolve(0); } },
@@ -84,6 +85,25 @@ test('owned session restart closes the old app gracefully then starts a new sess
   assert.equal(records.close, 2);
   assert.equal(records.stop, 0);
   assert.equal(controller.snapshot().closed, true);
+});
+
+test('Ultrafast is opt-in and changes only the next launch or restart', async () => {
+  const { controller, records } = fixture();
+  await controller.initialize();
+  assert.equal(controller.snapshot().showUltrafast, false);
+  await controller.dispatch('start');
+  await controller.dispatch('ultrafast-on');
+  assert.equal(controller.snapshot().showUltrafast, true);
+  assert.deepEqual(records.ultrafast, [false]);
+  assert.equal(records.close, 0);
+  await controller.dispatch('restart');
+  assert.deepEqual(records.ultrafast, [false, true]);
+  await controller.dispatch('ultrafast-off');
+  assert.equal(controller.snapshot().showUltrafast, false);
+  await controller.dispatch('restart');
+  assert.deepEqual(records.ultrafast, [false, true, false]);
+  assert.equal(records.stop, 0);
+  await controller.dispatch('quit');
 });
 
 test('start and restart refresh the model summary after an external configuration switch', async () => {
@@ -228,7 +248,8 @@ test('WPF window uses native controls, no browser/network assets, and confirms o
   assert.ok(script.includes("$client.Proxy = $null"));
   assert.ok(script.includes("$env:CODEX_SPEED_GUI_TOKEN"));
   assert.ok(script.includes("Send-Action 'restart'"));
-  assert.ok(script.includes('Standard / Fast'));
+  assert.ok(script.includes("Send-Action 'ultrafast-on'"));
+  assert.ok(script.includes("Send-Action 'ultrafast-off'"));
   assert.ok(script.includes('$eventArgs.Cancel = $true'));
   assert.equal(script.includes('WebBrowser'), false);
   assert.equal(script.includes('https://'), false);
@@ -245,6 +266,8 @@ $markup=[regex]::Match($source,'(?s)<Window xmlns=.*?</Window>').Value
 if (-not $markup) { throw 'Window markup missing' }
 $window=[Windows.Markup.XamlReader]::Parse($markup)
 if (-not $window.FindName('Primary') -or -not $window.FindName('Status')) { throw 'Required controls missing' }
+$ultrafast = $window.FindName('Ultrafast')
+if ($ultrafast -isnot [Windows.Controls.CheckBox] -or $ultrafast.IsChecked) { throw 'Ultrafast opt-in checkbox missing or checked' }
 $window.Close()
 [Console]::Out.Write('WPF_OK')`;
   const file = win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
