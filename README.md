@@ -4,16 +4,22 @@
 
 项目采用 MIT 许可证，源码不依赖 Sub2API。启动器在本次运行中适配客户端；退出后可恢复官方快捷方式启动。
 
-[下载发行版](https://github.com/AkkoForMe/codex-speed-launcher/releases) · [问题反馈](https://github.com/AkkoForMe/codex-speed-launcher/issues)
+## 下载
 
-本文适用于 [v0.2.2](https://github.com/AkkoForMe/codex-speed-launcher/releases/tag/v0.2.2) 预发布版，提供 Windows x64 EXE、Apple 芯片与 Intel Mac 的 `.app` 简约小窗。
+当前预发布版为 [v0.2.2](https://github.com/AkkoForMe/codex-speed-launcher/releases/tag/v0.2.2)。
+
+- [Windows x64 单文件 EXE](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.2/codex-speed-launcher-0.2.2-windows-x64.exe)
+- [Apple 芯片 Mac 应用](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.2/codex-speed-launcher-0.2.2-darwin-arm64-app.zip)
+- [Intel Mac 应用](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.2/codex-speed-launcher-0.2.2-darwin-x64-app.zip)
+
+[下载校验值](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.2/SHA256SUMS.txt) · [所有版本](https://github.com/AkkoForMe/codex-speed-launcher/releases) · [问题反馈](https://github.com/AkkoForMe/codex-speed-launcher/issues)
 
 ## 当前验证范围
 
 | 平台 | 状态 |
 | --- | --- |
-| Windows x64 | `26.1023.6621.0`、`26.1106.6628.0` 和 `26.1111.2228.0` 通过 Standard → Fast → Standard 隔离验证。`26.1111.2228.0` 另已验证 GPT‑6.2 Astra 和 GPT‑6.2 Sol 的 Ultrafast 档位。 |
-| macOS Apple 芯片／Intel | 已核验 `26.1111.21308` 的官方 Mac 归档。发布流程在对应架构的 Mac 上验收 AppKit 小窗。官方 Codex 的原生速度菜单与出站请求待实机验收。 |
+| Windows x64 | `26.1023.6621.0`、`26.1106.6628.0` 和 `26.1111.2228.0` 通过 Standard → Fast → Standard 隔离验证。`26.1111.2228.0` 另已验证 GPT‑6.2 Astra 和 GPT‑6.2 Sol 的 Ultrafast 请求。 |
+| macOS Apple 芯片／Intel | 已核验 `26.1111.21308` 的官方 Mac 归档。两种架构的最终 `.app` 均通过 GitHub Actions 的 AppKit 小窗模拟验收。官方 Codex 的原生速度菜单与出站请求待实机验收。 |
 
 Codex 更新后，启动器会重新检查资源和补丁位置。检查失败时停止启动，不应把未知版本当作已支持版本。
 
@@ -29,9 +35,9 @@ Codex 更新后，启动器会重新检查资源和补丁位置。检查失败�
 
 ## 显示 Ultrafast
 
-在启动器小窗勾选「显示 Ultrafast」，启动或重启 Codex 后，在原生速度菜单选择档位。Ultrafast 在已验收的简体中文 Codex 菜单中显示为「超快」。开关默认关闭，当前小窗中会保留勾选状态。命令行可用 `node src/cli.mjs launch --ultrafast`。
+打开启动器小窗时，「显示 Ultrafast」默认关闭。勾选后启动或重启 Codex，再在原生速度菜单手动选择 Ultrafast。已验收的简体中文菜单显示「超快」。
 
-使用 API Key 或自定义供应商时，Codex 需要从当前模型目录读到 `ultrafast` 档位。供应商可通过 Codex 的 `model_catalog_url` 配置提供该目录。
+使用 API Key 或自定义供应商时，当前模型目录需要声明 `ultrafast` 档位。缺少该选项时，检查当前供应商的 `model_catalog_url` 和模型目录。见 [简约小窗](docs/compact-window.md)。
 
 ## Windows
 
@@ -52,8 +58,8 @@ Windows「简约小窗」显示兼容性状态、Codex 版本和配置模型，�
 1. 解压完整的 `codex-speed-launcher-<版本>-win-x64.zip`，保留 `runtime`、`src` 等目录。
 2. 双击 `inspect-windows.cmd`。这一步只读检查，不会关闭正在运行的 Codex。
 3. 检查通过后，保存工作并完全退出 Codex，包括后台窗口。
-4. 双击 `launch-windows.cmd`，保持启动器窗口运行。
-5. 在 Codex 的原生速度菜单中切换 Standard／Fast，再发一条新请求。
+4. 双击 `launch-windows.cmd`。需要选择 Ultrafast 时，从 PowerShell 运行 `.\launch-windows.cmd --ultrafast`。
+5. 保持启动器窗口运行，在 Codex 的原生速度菜单中选择档位。
 
 便携包已附带固定版本的 Node.js，无需安装 npm 依赖。重新使用时，从 `launch-windows.cmd` 启动。
 
@@ -74,7 +80,7 @@ Apple 芯片使用 `darwin-arm64.zip`，Intel Mac 使用 `darwin-x64.zip`；它�
 1. 解压完整的包。
 2. 双击 `inspect-macos.command`，先检查本机应用是否兼容。
 3. 检查通过后，保存工作并完全退出 Codex。
-4. 双击 `launch-macos.command`，保持打开的终端窗口运行。
+4. 双击 `launch-macos.command`。需要选择 Ultrafast 时，从终端运行 `./launch-macos.command --ultrafast`。保持终端窗口运行。
 5. 在原生速度菜单切换档位，用新请求验证结果。
 
 如果 `.command` 没有可执行权限，在包目录执行 `chmod +x ./*.command ./runtime/node`。如果 macOS 阻止打开下载文件，先核对来源和 SHA-256，再通过系统提供的打开方式处理；启动器不会修改系统安全设置。
@@ -112,7 +118,7 @@ node src/cli.mjs verify --artifacts artifacts
 node --test
 ```
 
-`verify` 创建独立配置和本地模拟接口，不使用真实 Key 或消耗上游额度。Windows 会先只读检查 sandbox 是否就绪；未就绪时跳过桌面验证，需先完成官方 Codex 的正常设置。
+`verify` 用独立配置和测试 Key 向本地模拟接口发请求，检查 Standard → Fast → Standard。Windows 会先只读检查沙盒是否就绪。未就绪时，先完成官方 Codex 的正常设置，再运行桌面验证。
 
 使用自己的包路径时，可传入 `--app <路径>`；结构化检查结果可使用 `inspect --json`。
 

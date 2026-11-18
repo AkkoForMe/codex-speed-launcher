@@ -7,7 +7,9 @@
 - Windows Codex `26.1111.2228.0` 使用独立配置、测试 Key 和回环模拟接口。GPT‑6.2 Astra 和 GPT‑6.2 Sol 均在同一聊天完成 Standard → Fast → Ultrafast → Standard，出站字段依次为省略、`priority`、`ultrafast`、省略。
 - 同一模型目录继续声明 Ultrafast 时，用默认关闭的开关启动 Codex，原生菜单只提供 Standard 和 Fast。关闭后重启，原先选择过 Ultrafast 的聊天发出普通档请求。原有的三轮档位切换通过回归测试。
 - Windows 本机通过 150 项自动测试，覆盖 WPF 控件、两端共享的启动和重启行为、Ultrafast 菜单与请求适配。最终 EXE 版本、两种兼容性检查、小窗打开与退出均通过。
-- 测试前后安装归档的 SHA-256 一致，隔离验证配置已清理，真实上游请求为 0。发布流程分别在 Apple 芯片和 Intel Mac 上验收原生小窗。Mac 上的官方 Codex 速度菜单与出站档位仍待实机验收。
+- 测试前后安装归档的 SHA-256 一致，隔离验证配置已清理，真实上游请求为 0。
+- Apple 芯片版和 Intel 版分别通过最终 `.app` 签名、文件清单、内置运行时和小窗检查。小窗模拟操作确认默认关闭、勾选后启动和重启保留选择。Mac 上的官方 Codex 速度菜单与出站档位仍待实机验收。[GitHub Actions 验收](https://github.com/AkkoForMe/codex-speed-launcher/actions/runs/44312186668)
+- v0.2.2 于 2026-11-18 以预发布版公开。13 个发布附件的 SHA-256 已核对，Windows 下载件与本地验收 EXE 的 SHA-256 一致。[发布页](https://github.com/AkkoForMe/codex-speed-launcher/releases/tag/v0.2.2) · [校验清单](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.2/SHA256SUMS.txt)
 
 ## 0.2.1 Mac 原生小窗
 
@@ -38,11 +40,13 @@ EXE 版本为 `0.2.0`，SHA-256 为 `9da359af8e09c381cdb2041bac01098ccd0c9e945d9
 - EXE 完成隔离的真实 Windows 桌面与 core 三轮模拟请求验证：同一模型、同一 Key、同一聊天的默认档 → `priority` → 默认档均通过；测试进程已退出，已安装应用归档未变。
 - 可公开文件经过站点名称、个人路径和凭据特征检查，未发现相关内容。必要的上游 MIT 版权和第三方许可证保留。
 - 两份 GitHub Actions 工作流通过本地 actionlint 检查；远端运行待发布到独立仓库后验证。
-- Ultrafast 有独立的 core 模拟研究结果，桌面端尚未完成该档位验收，未纳入当前功能。
+- 0.1.1 的桌面验收覆盖 Standard 和 Fast。Ultrafast 当时完成了独立的 core 模拟研究。
 
-下表保留 0.1.0 便携包的初次验证范围；0.1.1 沿用相同两处速度适配。
+## 0.1.0 便携包初次验收
 
-## Windows 验收
+0.1.1 沿用相同的两处速度适配。
+
+### Windows 验收
 
 | 检查 | 结果 |
 | --- | --- |
@@ -61,13 +65,13 @@ EXE 版本为 `0.2.0`，SHA-256 为 `9da359af8e09c381cdb2041bac01098ccd0c9e945d9
 
 Windows 的桌面联调通过独立 `CODEX_HOME` 和 Electron 配置目录启动官方应用。日常启动入口使用已注册的 Windows 应用标识；该入口的调用、拒绝已运行应用和进程归属检查已通过自动检查。本次没有完全退出正在工作的主应用，因此尚未在新建 Windows 系统用户下完成整套日常启动验收。
 
-## 中转和上游边界
+### 中转和上游边界
 
 本次全部请求发往本地回环模拟接口，使用生成的测试 Key，真实上游请求数为 `0`。结果证明原生菜单能控制发出的 `service_tier`，不能据此证明某个中转已透传、上游接受了优先档位或实际延迟降低。
 
-使用自己的中转时，按 README 分别发送 Standard、Fast、Standard 三条小请求，在中转或上游记录中核对档位。当前仅适配 Standard／Fast；Ultrafast 未纳入交付。
+0.1.0 的中转验收顺序为 Standard → Fast → Standard。后续版本的操作见 [速度验证](speed-verification.md)。
 
-## macOS 状态
+### macOS 状态
 
 Apple 芯片与 Intel 包均为实验支持。应用路径和签名检查、进程清理及归档可执行位有自动检查；没有 Mac 真机，未完成 `.command` 双击、原生菜单或真实请求验收。macOS 本机结构不匹配时启动器停止。
 

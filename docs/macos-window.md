@@ -4,7 +4,7 @@ Mac 应用与 Windows 小窗展示相同的状态信息和按钮，界面使用�
 
 ## 使用
 
-1. Apple 芯片选择 `darwin-arm64-app.zip`，Intel 选择 `darwin-x64-app.zip`，解压完整的 `.app`。
+1. 在 [v0.2.2 发布页](https://github.com/AkkoForMe/codex-speed-launcher/releases/tag/v0.2.2) 选择与 Mac 芯片匹配的包。Apple 芯片选择 `darwin-arm64-app.zip`，Intel 选择 `darwin-x64-app.zip`。解压完整的 `.app`。
 2. 将应用放到固定目录，再双击打开。首次打开若触发系统下载检查，核对来源和 SHA-256 后使用 macOS 提供的打开方式。
 3. 等待只读兼容性检查完成。小窗显示 Codex 版本和配置模型；已有 Codex 进程时，先保存工作并正常退出，再点刷新。
 4. 需要使用 Ultrafast 时，在 0.2.2 小窗勾选「显示 Ultrafast」。此选项默认关闭，在下次启动或重启 Codex 时生效。
@@ -20,7 +20,7 @@ Mac 应用与 Windows 小窗展示相同的状态信息和按钮，界面使用�
 
 ## 验证范围
 
-Apple 芯片与 Intel Mac 的发布门禁分别编译和解压最终 `.app`，校验签名、资源清单、可执行权限与内置运行时。原生窗口模拟验收检查刷新、Ultrafast 开关、启动、确认取消、退出超时、重启和关闭。验收使用独立模拟配置，保存报告与截图。
+v0.2.2 的 Apple 芯片版和 Intel 版分别在对应架构的 GitHub Actions 运行器上构建并验收。两份最终应用包均通过签名、文件清单、内置运行时检查和小窗模拟验收。小窗验收覆盖刷新、Ultrafast 默认关闭、勾选后启动、取消操作、退出超时、重启保留选择及正常退出。[构建与验收记录](https://github.com/AkkoForMe/codex-speed-launcher/actions/runs/44312186668)
 
 官方 Codex 的原生速度菜单和出站档位仍待 Mac 实机核对。
 
