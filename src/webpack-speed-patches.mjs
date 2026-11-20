@@ -20,6 +20,12 @@ export const WINDOWS_261111_WEBPACK_PROFILE = Object.freeze({
   counts: Object.freeze({ 'api-key-service-tier-access': 8, 'api-key-request-tier-access': 6 }),
 });
 
+export const WINDOWS_261117_WEBPACK_PROFILE = Object.freeze({
+  version: '26.1117.3838.0',
+  sha256: '2334574abbf17086f34f60c228d2a32fc18ddb4044477771db6763023299a871',
+  counts: Object.freeze({ 'api-key-service-tier-access': 12, 'api-key-request-tier-access': 14 }),
+});
+
 // Read-only inspection of the official macOS 26.1111.21308 (build 27194)
 // archive found the same two semantic contracts with a different chunk layout.
 // Never reuse another platform's counts or accept an unknown archive hash.
@@ -30,7 +36,9 @@ export const MACOS_WEBPACK_PROFILE = Object.freeze({
   counts: Object.freeze({ 'api-key-service-tier-access': 8, 'api-key-request-tier-access': 6 }),
 });
 
-export const WEBPACK_PROFILES = Object.freeze([WEBPACK_PROFILE, WINDOWS_261111_WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE]);
+export const WEBPACK_PROFILES = Object.freeze([
+  WEBPACK_PROFILE, WINDOWS_261111_WEBPACK_PROFILE, WINDOWS_261117_WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE,
+]);
 
 const hookPrefix = String.raw`(?<prefix>(?<account>${ID})=\(0,${MEMBER}\)\((?<host>${ID})\),` +
   String.raw`(?<managed>${ID})=\k<account>\?\.authMethod==="chatgpt"\|\|\k<account>\?\.authMethod==="personalAccessToken"\|\|\k<account>\?\.authMethod==="amazonBedrock",` +

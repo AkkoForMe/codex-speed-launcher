@@ -24,10 +24,12 @@ function fixture({ dropFast = false, aliasModel = false, loseTranscript = false,
   let readinessReads = 0, focusAttempts = 0, closing = 0;
   const runtime = { sessionId: 'isolated-page',
     async evaluate(source) {
-      if (source.includes('function pageState(')) return { app: true, composerCount: 1, composerText: input,
-        markerCount, stopping: false, modelLabel: '6.1 Sol', composerEditable: readinessReads++ >= readinessDelay,
-        composerFocused: focused, menuOpen: menu || closing-- > 0,
-        prompts: loseTranscript ? prompts.slice(-1) : [...prompts] };
+      if (source.includes('function pageState(')) {
+        const menuOpen = menu || closing-- > 0;
+        return { app: true, composerCount: 1, composerText: input, markerCount, stopping: false,
+          modelLabel: menuOpen ? null : '6.1 Sol', composerEditable: readinessReads++ >= readinessDelay,
+          composerFocused: focused, menuOpen, prompts: loseTranscript ? prompts.slice(-1) : [...prompts] };
+      }
       if (source.includes('function fastState(')) return menu ? { checked, disabled: false } : null;
       if (source.includes('function modelMenu(')) { menu = true; focused = false; return true; }
       if (source.includes('function focusComposer(')) { focused = !input && focusAttempts++ >= focusDelay; return focused; }
@@ -79,6 +81,32 @@ test('native UI verifier switches Standard / Fast / Standard and checks local wi
   assert.equal(commands.filter(command => command.method === 'Input.insertText').length, 3);
   assert.ok(commands.every(command => command.sessionId === 'isolated-page'));
   assert.equal(screenshots.length, 7);
+});
+
+test('native UI verifier keeps the model identity when effort labels are localized', async () => {
+  const f = fixture();
+  const evaluate = f.runtime.evaluate;
+  f.runtime.evaluate = async source => {
+    const state = await evaluate(source);
+    if (!source.includes('function pageState(')) return state;
+    const button = {
+      innerText: f.screenshots.length ? '6.1 Sol\n轻度\n无' : '6.1 Sol\nLight\nNone',
+      closest: () => null,
+    };
+    const { modelLabel } = vm.runInNewContext(source, {
+      location: { protocol: 'app:' },
+      document: {
+        body: { innerText: '' },
+        querySelector: () => null,
+        querySelectorAll: selector => selector === 'button,[role="button"]' ? [button] : [],
+      },
+    });
+    return { ...state, modelLabel: state.menuOpen ? null : modelLabel };
+  };
+  const report = await verifyNativeMenu(f.runtime, { captures: f.captures, directory, system: f.system });
+  assert.equal(report.ok, true);
+  assert.equal(report.sameModel, true);
+  assert.deepEqual(report.rows.map(row => row.capturedTier), [null, 'priority', null]);
 });
 
 test('native UI verifier reads and clicks the 26.1106 checkbox without the legacy data marker', async () => {

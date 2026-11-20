@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
-import { inspectWebpackSource, patchWebpackSource, WEBPACK_PROFILE, WINDOWS_261111_WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE, WEBPACK_PROFILES } from '../src/webpack-speed-patches.mjs';
+import {
+  inspectWebpackSource, patchWebpackSource, WEBPACK_PROFILE, WINDOWS_261111_WEBPACK_PROFILE,
+  WINDOWS_261117_WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE, WEBPACK_PROFILES,
+} from '../src/webpack-speed-patches.mjs';
 import { inspectOpenArchive } from '../src/preflight.mjs';
 import { sha256 } from '../src/asar.mjs';
 
@@ -156,14 +159,19 @@ test('macOS webpack profile requires its own audited hash and exact 8/6 resource
   assert.throws(() => inspectOpenArchive(archiveFixture({ ...mac, requestCount: 7 })), /matched 7 times \(expected 6\)/);
 });
 
-test('audited 26.1111 Windows and Mac webpack profiles support the Ultrafast overlay', () => {
-  for (const profile of [WINDOWS_261111_WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE]) {
-    const archive = archiveFixture({ sha: profile.sha256, hookCount: 8, requestCount: 6 });
-    const plan = inspectOpenArchive(archive, { ultrafast: true });
+test('audited Windows and Mac webpack profiles support the Ultrafast overlay', () => {
+  const cases = [
+    [WINDOWS_261111_WEBPACK_PROFILE, 8, 6],
+    [WINDOWS_261117_WEBPACK_PROFILE, 12, 14],
+    [MACOS_WEBPACK_PROFILE, 8, 6],
+  ];
+  for (const [profile, hookCount, requestCount] of cases) {
+    const layout = { sha: profile.sha256, hookCount, requestCount };
+    const plan = inspectOpenArchive(archiveFixture(layout), { ultrafast: true });
     assert.equal(plan.rendererProfile, profile.name ?? 'webpack-' + profile.version);
     assert.equal(plan.ultrafast, true);
-    assert.equal(plan.resources.length, 14);
+    assert.equal(plan.resources.length, hookCount + requestCount);
     assert.ok(plan.resources.every(resource => resource.content.includes('{fast:!0,ultrafast:!0}')));
-    assert.throws(() => inspectOpenArchive(archiveFixture({ sha: profile.sha256 })), /expected 8/);
+    assert.throws(() => inspectOpenArchive(archiveFixture({ ...layout, hookCount: hookCount - 1 })), new RegExp(`expected ${hookCount}`));
   }
 });

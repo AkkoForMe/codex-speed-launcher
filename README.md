@@ -14,11 +14,14 @@
 
 [下载校验值](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.2/SHA256SUMS.txt) · [所有版本](https://github.com/AkkoForMe/codex-speed-launcher/releases) · [问题反馈](https://github.com/AkkoForMe/codex-speed-launcher/issues)
 
+Windows Codex `26.1117.3838.0` 需要启动器 v0.2.3，可[从源码构建 Windows EXE](docs/executable-distribution.md)。
+
 ## 当前验证范围
 
 | 平台 | 状态 |
 | --- | --- |
 | Windows x64 | `26.1023.6621.0`、`26.1106.6628.0` 和 `26.1111.2228.0` 通过 Standard → Fast → Standard 隔离验证。`26.1111.2228.0` 另已验证 GPT‑6.2 Astra 和 GPT‑6.2 Sol 的 Ultrafast 请求。 |
+| Windows x64（v0.2.3） | `26.1117.3838.0` 通过 Standard → Fast → Standard 隔离验证。 |
 | macOS Apple 芯片／Intel | 已核验 `26.1111.21308` 的官方 Mac 归档。两种架构的最终 `.app` 均通过 GitHub Actions 的 AppKit 小窗模拟验收。官方 Codex 的原生速度菜单与出站请求待实机验收。 |
 
 Codex 更新后，启动器会重新检查资源和补丁位置。检查失败时停止启动，不应把未知版本当作已支持版本。

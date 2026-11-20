@@ -39,9 +39,10 @@ function pageState() {
     markerCount: text.split('SPEED_TEST_OK').length - 1,
     stopping: [...document.querySelectorAll('button')].some(button =>
       /^(Stop|Stop generating|停止|停止生成)$/i.test(button.getAttribute('aria-label') ?? '')),
+    // Effort labels in this control can change when localization finishes.
     modelLabel: [...document.querySelectorAll('button,[role="button"]')]
       .filter(button => !button.closest('[role="menu"]'))
-      .map(button => button.innerText.trim()).find(label => /^6\.1 Sol(?:\s|$)/.test(label)) ?? null,
+      .map(button => button.innerText.trim().match(/^6\.1 Sol(?=\s|$)/)?.[0]).find(Boolean) ?? null,
     prompts: [...text.matchAll(/CODEX_SPEED_UI_(?:STANDARD_1|FAST|STANDARD_2)/g)].map(match => match[0]),
   };
 }
@@ -186,7 +187,10 @@ export async function verifyNativeMenu(runtime, {
         // The native menu may close after selection. Reopen it to read the
         // committed rendered state before sending, without changing the tier.
         await closeMenu();
-        await waitFor(async () => (await evaluate(pageState)).modelLabel, 'model control after speed selection');
+        await waitFor(async () => {
+          const state = await evaluate(pageState);
+          return !state.menuOpen && state.modelLabel;
+        }, 'model control after speed selection');
         await evaluate(modelMenu);
         toggle = await waitFor(async () => {
           const state = await readFastState();
@@ -195,17 +199,16 @@ export async function verifyNativeMenu(runtime, {
       }
       await screenshot(`native-ui-menu-${token.toLowerCase()}.png`, { menuChecked: checked });
       await closeMenu();
-      const before = await evaluate(pageState);
-      if (before.modelLabel !== initial.modelLabel) throw new Error('The diagnostic model changed while switching speed.');
-      const captureStart = captures.length;
-      await waitFor(async () => {
+      const before = await waitFor(async () => {
         const state = await evaluate(pageState);
-        if (!state.composerEditable || state.menuOpen || state.stopping) return false;
+        if (!state.composerEditable || state.menuOpen || state.stopping || !state.modelLabel) return false;
+        if (state.modelLabel !== initial.modelLabel) throw new Error('The diagnostic model changed while switching speed.');
         if (state.composerText) throw new Error('The diagnostic composer is unexpectedly nonempty.');
-        if (state.composerFocused) return true;
+        if (state.composerFocused) return state;
         await evaluate(focusComposer);
         return false;
       }, 'native editable composer focus', readinessTimeoutMs);
+      const captureStart = captures.length;
       const prompt = `CODEX_SPEED_UI_${token}. Local speed verification. Reply briefly. Do not use tools.`;
       await send('Input.insertText', { text: prompt });
       await waitFor(async () => (await evaluate(pageState)).composerText === prompt, 'native composer input');
