@@ -6,15 +6,13 @@
 
 ## 下载
 
-当前预发布版为 [v0.2.2](https://github.com/AkkoForMe/codex-speed-launcher/releases/tag/v0.2.2)。
+当前预发布版为 [v0.2.3](https://github.com/AkkoForMe/codex-speed-launcher/releases/tag/v0.2.3)。
 
-- [Windows x64 单文件 EXE](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.2/codex-speed-launcher-0.2.2-windows-x64.exe)
-- [Apple 芯片 Mac 应用](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.2/codex-speed-launcher-0.2.2-darwin-arm64-app.zip)
-- [Intel Mac 应用](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.2/codex-speed-launcher-0.2.2-darwin-x64-app.zip)
+- [Windows x64 单文件 EXE](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.3/codex-speed-launcher-0.2.3-windows-x64.exe)
+- [Apple 芯片 Mac 应用](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.3/codex-speed-launcher-0.2.3-darwin-arm64-app.zip)
+- [Intel Mac 应用](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.3/codex-speed-launcher-0.2.3-darwin-x64-app.zip)
 
-[下载校验值](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.2/SHA256SUMS.txt) · [所有版本](https://github.com/AkkoForMe/codex-speed-launcher/releases) · [问题反馈](https://github.com/AkkoForMe/codex-speed-launcher/issues)
-
-Windows Codex `26.1117.3838.0` 需要启动器 v0.2.3，可[从源码构建 Windows EXE](docs/executable-distribution.md)。
+[下载校验值](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.3/SHA256SUMS.txt) · [所有版本](https://github.com/AkkoForMe/codex-speed-launcher/releases) · [问题反馈](https://github.com/AkkoForMe/codex-speed-launcher/issues)
 
 ## 当前验证范围
 

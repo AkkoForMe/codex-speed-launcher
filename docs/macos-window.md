@@ -4,10 +4,10 @@ Mac 应用与 Windows 小窗展示相同的状态信息和按钮，界面使用�
 
 ## 使用
 
-1. 在 [v0.2.2 发布页](https://github.com/AkkoForMe/codex-speed-launcher/releases/tag/v0.2.2) 选择与 Mac 芯片匹配的包。Apple 芯片选择 `darwin-arm64-app.zip`，Intel 选择 `darwin-x64-app.zip`。解压完整的 `.app`。
+1. 在 [v0.2.3 发布页](https://github.com/AkkoForMe/codex-speed-launcher/releases/tag/v0.2.3) 选择与 Mac 芯片匹配的包。Apple 芯片选择 `darwin-arm64-app.zip`，Intel 选择 `darwin-x64-app.zip`。解压完整的 `.app`。
 2. 将应用放到固定目录，再双击打开。首次打开若触发系统下载检查，核对来源和 SHA-256 后使用 macOS 提供的打开方式。
 3. 等待只读兼容性检查完成。小窗显示 Codex 版本和配置模型；已有 Codex 进程时，先保存工作并正常退出，再点刷新。
-4. 需要使用 Ultrafast 时，在 0.2.2 小窗勾选「显示 Ultrafast」。此选项默认关闭，在下次启动或重启 Codex 时生效。
+4. 需要使用 Ultrafast 时，在小窗勾选「显示 Ultrafast」。此选项默认关闭，在下次启动或重启 Codex 时生效。
 5. 点「启动 Codex」，随后在原生菜单中选择当前模型支持的档位。
 
 「配置模型」来自当前 `CODEX_HOME/config.toml`，没有设置时读取用户目录 `.codex/config.toml`，不代表当前聊天实际选择。小窗不显示 Key、供应商地址或聊天内容。

@@ -7,6 +7,7 @@
 - 客户端归档指纹匹配。12 份菜单脚本和 14 份请求脚本通过适配和语法检查。
 - 桌面客户端和内置 core 均通过 Standard → Fast → Standard 隔离验证。同一桌面聊天中的三轮请求使用同一模型 `gpt-6.1-sol`，档位字段依次为省略、`priority`、省略。请求均发往本地模拟接口。
 - 151 项自动测试通过。测试进程已退出，隔离配置已清理，已安装归档在测试前后的 SHA-256 一致。
+- v0.2.3 于 2026-11-20 作为预发布版公开。13 个附件的 SHA-256 已核对，Windows 发布件与本机验收 EXE 一致。Apple 芯片与 Intel Mac 应用均通过签名完整性、文件清单和小窗模拟验收。[发布页](https://github.com/AkkoForMe/codex-speed-launcher/releases/tag/v0.2.3) · [构建记录](https://github.com/AkkoForMe/codex-speed-launcher/actions/runs/44754104987)
 
 ## 0.2.2 Ultrafast
 
