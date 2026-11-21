@@ -3,7 +3,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import {
   inspectWebpackSource, patchWebpackSource, WEBPACK_PROFILE, WINDOWS_261111_WEBPACK_PROFILE,
-  WINDOWS_261117_WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE, WEBPACK_PROFILES,
+  WINDOWS_261117_WEBPACK_PROFILE, WINDOWS_261117_4957_WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE, WEBPACK_PROFILES,
 } from '../src/webpack-speed-patches.mjs';
 import { inspectOpenArchive } from '../src/preflight.mjs';
 import { sha256 } from '../src/asar.mjs';
@@ -163,6 +163,7 @@ test('audited Windows and Mac webpack profiles support the Ultrafast overlay', (
   const cases = [
     [WINDOWS_261111_WEBPACK_PROFILE, 8, 6],
     [WINDOWS_261117_WEBPACK_PROFILE, 12, 14],
+    [WINDOWS_261117_4957_WEBPACK_PROFILE, 12, 14],
     [MACOS_WEBPACK_PROFILE, 8, 6],
   ];
   for (const [profile, hookCount, requestCount] of cases) {

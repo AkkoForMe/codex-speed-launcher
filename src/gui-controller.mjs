@@ -5,55 +5,61 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { discoverApp, listAppProcesses } from './platform.mjs';
 import { inspectArchive } from './preflight.mjs';
 import { launchSession } from './launch.mjs';
+import { inspectUltrafast } from './ultrafast.mjs';
 
 export function safeGuiError(error) {
   return String(error?.message ?? error).replace(/Bearer\s+[^\s"']+/gi, 'Bearer [redacted]')
     .replace(/\bsk-[A-Za-z0-9_-]+/g, '[redacted]').slice(0, 600);
 }
 
-// Only the root model name is displayed. Provider sections, URLs and credentials
-// never enter the UI state, and no configuration is written by this module.
-export function configuredModel(source) {
-  const root = String(source).split(/^\s*\[/m, 1)[0];
-  const literal = root.match(/^\s*model\s*=\s*("(?:[^"\\]|\\.)*"|'[^'\r\n]*')\s*(?:#.*)?$/m)?.[1];
-  if (!literal) return '未读取';
-  try {
-    const value = literal.startsWith('"') ? JSON.parse(literal) : literal.slice(1, -1);
-    return /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/.test(value) ? value : '未读取';
-  } catch { return '未读取'; }
-}
-
 export function createGuiController(options = {}) {
+  const env = options.launchOptions?.env ?? process.env;
+  const codexHome = options.launchOptions?.codexHome ?? options.codexHome;
+  const home = codexHome ?? env.CODEX_HOME ?? join(homedir(), '.codex');
   const io = {
     discover: () => discoverApp({ appPath: options.appPath }),
     inspect: app => inspectArchive(app.asarPath),
     processes: app => listAppProcesses(app),
     launch: args => launchSession(args),
-    readConfig: () => readFile(join(options.codexHome ?? process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'config.toml'), 'utf8'),
+    readConfig: () => readFile(join(home, 'config.toml'), 'utf8'),
+    inspectUltrafast: (source, app) => inspectUltrafast(source, { app, home, env }),
     sleep, ...options.system,
   };
   let app, session, operation, stopGate, disposed = false;
   const requestedQuits = new WeakSet();
+  const checkingUltrafast = '正在检查当前模型的 Ultrafast 档位…';
   let state = { title: 'Codex Speed Launcher', version: '—', model: '未读取',
     phase: 'checking', status: '正在检查 Codex…', detail: '', busy: true,
-    showUltrafast: false, compatible: false, externalRunning: false, managed: false, closed: false };
+    showUltrafast: false, ultrafastAvailable: false, ultrafastDetail: checkingUltrafast,
+    compatible: false, externalRunning: false, managed: false, closed: false };
   const snapshot = () => ({ ...state });
   const update = fields => { state = { ...state, ...fields }; options.onState?.(snapshot()); };
   const idle = fields => update({ busy: false, ...fields });
 
+  async function checkConfiguration() {
+    try {
+      const source = await io.readConfig();
+      const { model, ultrafastAvailable, ultrafastDetail } = await io.inspectUltrafast(source, app);
+      return { model, ultrafastAvailable, ultrafastDetail, showUltrafast: state.showUltrafast && ultrafastAvailable };
+    } catch {
+      return { model: '未读取', showUltrafast: false, ultrafastAvailable: false, ultrafastDetail: '暂时无法读取 Codex 配置。' };
+    }
+  }
+
   async function inspect() {
-    update({ phase: 'checking', status: '正在检查 Codex…', detail: '', busy: true });
+    update({ phase: 'checking', status: '正在检查 Codex…', detail: '', busy: true, ultrafastDetail: checkingUltrafast });
     try {
       app = await io.discover();
-      const [model, plan, processes] = await Promise.all([
-        io.readConfig().then(configuredModel, () => '未读取'), io.inspect(app), io.processes(app),
+      const [configuration, plan, processes] = await Promise.all([
+        checkConfiguration(), io.inspect(app), io.processes(app),
       ]);
       if (!plan) throw new Error('Compatibility inspection returned no patch plan.');
-      idle({ version: app.version, model, compatible: true, externalRunning: processes.length > 0,
+      idle({ version: app.version, ...configuration, compatible: true, externalRunning: processes.length > 0,
         phase: 'ready', status: processes.length ? '请先退出正在运行的 Codex' : '已就绪',
         detail: processes.length ? '保存工作并从 Codex 菜单退出，再点击刷新。' : '启动后，在 Codex 速度菜单选档。' });
     } catch (error) {
-      idle({ phase: 'error', status: '兼容性检查未通过', compatible: false, detail: safeGuiError(error) });
+      idle({ phase: 'error', status: '兼容性检查未通过', compatible: false, detail: safeGuiError(error),
+        showUltrafast: false, ultrafastAvailable: false, ultrafastDetail: '请先完成兼容性检查。' });
     }
   }
 
@@ -96,11 +102,11 @@ export function createGuiController(options = {}) {
   async function start() {
     if (!state.compatible) throw new Error('请先完成兼容性检查。');
     if (state.externalRunning && !session) throw new Error('请先退出正在运行的 Codex，再刷新状态。');
-    update({ phase: 'starting', busy: true, status: '正在启动 Codex…', detail: '' });
-    // A provider switcher may have updated the model since this window opened.
-    update({ model: await io.readConfig().then(configuredModel, () => '未读取') });
+    update({ phase: 'starting', busy: true, status: '正在启动 Codex…', detail: '', ultrafastDetail: checkingUltrafast });
+    // Recheck the catalog in case the provider, key or model changed while the window was open.
+    update(await checkConfiguration());
     const owned = await io.launch({ app, appPath: options.appPath,
-      ...(options.launchOptions ?? {}), ultrafast: state.showUltrafast, log: () => {} });
+      ...(options.launchOptions ?? {}), codexHome, ultrafast: state.showUltrafast, log: () => {} });
     session = owned;
     idle({ managed: true, externalRunning: false, phase: 'running', status: '速度菜单已启用',
       detail: state.showUltrafast ? '在 Codex 速度菜单查看当前模型支持的档位。费用以中转结算为准。'
@@ -130,8 +136,12 @@ export function createGuiController(options = {}) {
   }
 
   async function perform(action) {
-    if (action === 'refresh') { if (session) return; await inspect(); }
-    else if (action === 'start') { if (!session) await start(); }
+    if (action === 'refresh') {
+      if (session) {
+        update({ ultrafastDetail: checkingUltrafast });
+        idle(await checkConfiguration());
+      } else await inspect();
+    } else if (action === 'start') { if (!session) await start(); }
     else if (action === 'restart') { if (!session) throw new Error('只能重启由本工具启动的 Codex。'); await stop(); await start(); }
     else if (action === 'quit') {
       await stop(); disposed = true;
@@ -147,11 +157,12 @@ export function createGuiController(options = {}) {
       if (operation || state.busy) throw new Error('正在处理，请稍候。');
       if (action === 'ultrafast-on' || action === 'ultrafast-off') {
         if (!state.compatible) throw new Error('请先完成兼容性检查。');
+        if (action === 'ultrafast-on' && !state.ultrafastAvailable) throw new Error(state.ultrafastDetail);
         update({ showUltrafast: action === 'ultrafast-on' });
         return Promise.resolve();
       }
       if (!['refresh', 'start', 'restart', 'quit'].includes(action)) throw new Error('未知操作。');
-      if (session && ['refresh', 'start'].includes(action)) throw new Error('本次 Codex 已在运行。');
+      if (session && action === 'start') throw new Error('本次 Codex 已在运行。');
       update({ busy: true });
       operation = perform(action).catch(error => {
         idle({ managed: !!session, phase: 'error', status: '操作未完成', detail: safeGuiError(error) });

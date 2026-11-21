@@ -11,8 +11,10 @@ test('macOS native mock runs the real controller with graceful timeout and recov
   const controller = createMacSelfTestController();
   await controller.initialize();
   assert.equal(controller.snapshot().version, 'Mock 1.0');
+  assert.equal(controller.snapshot().ultrafastAvailable, false);
   await controller.dispatch('refresh');
   assert.equal(controller.snapshot().selfTestStats.inspections, 2);
+  assert.equal(controller.snapshot().ultrafastAvailable, true);
   await controller.dispatch('start');
   assert.equal(controller.snapshot().selfTestStats.launches, 1);
   assert.equal(controller.snapshot().selfTestStats.lastLaunchUltrafast, false);
@@ -89,6 +91,11 @@ test('the standalone macOS backend exits after a normal native parent pipe close
   };
   let state = await waitState(state => !state.busy);
   assert.equal(state.compatible, true);
+  assert.equal(state.ultrafastAvailable, false);
+  assert.match(state.ultrafastDetail, /未提供 Ultrafast/);
+  assert.equal((await fetch(`${hello.endpoint}/action`, { method: 'POST', headers, body: 'ultrafast-on' })).status, 409);
+  await action('refresh');
+  state = await waitState(state => state.ultrafastAvailable && !state.busy);
   assert.equal(state.showUltrafast, false);
   await action('ultrafast-on');
   await waitState(state => state.showUltrafast);
@@ -102,7 +109,7 @@ test('the standalone macOS backend exits after a normal native parent pipe close
   await action('quit');
   state = await waitState(state => state.closed);
   assert.equal(state.closed, true);
-  assert.deepEqual(state.selfTestStats, { inspections: 1, launches: 2, closes: 3, forcedStops: 0, lastLaunchUltrafast: true });
+  assert.deepEqual(state.selfTestStats, { inspections: 2, launches: 2, closes: 3, forcedStops: 0, lastLaunchUltrafast: true });
   child.stdin.end();
   const [code, signal] = await exited;
   assert.equal(code, 0);

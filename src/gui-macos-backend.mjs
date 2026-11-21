@@ -11,6 +11,12 @@ export function createMacSelfTestController() {
     discover: async () => { stats.inspections++; return { version: 'Mock 1.0', asarPath: 'mock-only' }; },
     inspect: () => ({ requiredIds: ['mock'] }), processes: async () => [],
     readConfig: async () => 'model="gpt-6.1-sol"',
+    inspectUltrafast: async () => ({
+      model: 'gpt-6.1-sol',
+      ultrafastAvailable: stats.inspections > 1,
+      ultrafastDetail: stats.inspections > 1
+        ? '目录已提供，勾选后启动或重启生效。' : '当前模型目录未提供 Ultrafast。',
+    }),
     sleep: async () => {},
     launch: async ({ ultrafast }) => {
       stats.launches++;

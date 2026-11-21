@@ -5,9 +5,10 @@ import http from 'node:http';
 import { execFile } from 'node:child_process';
 import { win32 } from 'node:path';
 import { promisify } from 'node:util';
-import { configuredModel, createGuiController } from '../src/gui-controller.mjs';
+import { createGuiController } from '../src/gui-controller.mjs';
 import { showGuiFailure, startGuiBridge } from '../src/gui.mjs';
 import { windowsGuiScript } from '../src/gui-window.mjs';
+import { inspectUltrafast } from '../src/ultrafast.mjs';
 
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 function fixture(overrides = {}) {
@@ -16,6 +17,8 @@ function fixture(overrides = {}) {
     discover: async () => ({ version: '26.1106.6628.0', asarPath: 'fixture' }),
     inspect: () => ({ requiredIds: ['one'] }), processes: async () => [],
     readConfig: async () => 'model="gpt-6.1-sol"\n[model_providers.secret]\napi_key="sk-never-display"',
+    inspectUltrafast: async source => ({ ...await inspectUltrafast(source), ultrafastAvailable: true,
+      ultrafastDetail: '目录已提供，勾选后启动或重启生效。' }),
     sleep: () => new Promise(() => {}),
     launch: async ({ ultrafast }) => {
       records.launch++;
@@ -47,11 +50,11 @@ test('GUI startup errors are shown as redacted data in a fixed hidden helper', a
   assert.equal(script.includes('must-not-run'), false);
 });
 
-test('GUI displays only a safe root model, never provider secrets or a section override', () => {
-  assert.equal(configuredModel('model = "gpt-6.1-sol" # chosen\n[providers.test]\nmodel="private"'), 'gpt-6.1-sol');
-  assert.equal(configuredModel("model = 'gpt-6-astra'"), 'gpt-6-astra');
-  for (const source of ['[providers.test]\nmodel="sk-secret"', 'model="bad\\nmodel"', 'model=6', 'model="<script>"']) {
-    assert.equal(configuredModel(source), '未读取');
+test('GUI displays safe model names and excludes provider secrets', async () => {
+  assert.equal((await inspectUltrafast('model = "gpt-6.1-sol" # chosen\n[providers.test]\nmodel="private"')).model, 'gpt-6.1-sol');
+  assert.equal((await inspectUltrafast("model = 'gpt-6-astra'")).model, 'gpt-6-astra');
+  for (const source of ['[providers.test]\nmodel="sk-secret"', 'model="sk-secret"', 'model="bad\\nmodel"', 'model=6', 'model="<script>"']) {
+    assert.equal((await inspectUltrafast(source)).model, '未读取');
   }
 });
 
@@ -103,6 +106,37 @@ test('Ultrafast is opt-in and changes only the next launch or restart', async ()
   await controller.dispatch('restart');
   assert.deepEqual(records.ultrafast, [false, true, false]);
   assert.equal(records.stop, 0);
+  await controller.dispatch('quit');
+});
+
+test('Ultrafast is disabled when unconfirmed and a key switch drops the stale selection before launch', async () => {
+  let available = false;
+  const { controller, records } = fixture({ inspectUltrafast: async () => ({
+    model: 'gpt-6.2-sol', ultrafastAvailable: available,
+    ultrafastDetail: available ? '目录已提供。' : '当前模型目录未提供 Ultrafast。',
+  }) });
+  await controller.initialize();
+  assert.equal(controller.snapshot().ultrafastAvailable, false);
+  assert.throws(() => controller.dispatch('ultrafast-on'), /未提供/);
+  available = true;
+  await controller.dispatch('refresh');
+  assert.equal(controller.snapshot().ultrafastAvailable, true);
+  await controller.dispatch('ultrafast-on');
+  available = false;
+  await controller.dispatch('start');
+  assert.deepEqual(records.ultrafast, [false]);
+  assert.equal(controller.snapshot().showUltrafast, false);
+
+  available = true;
+  await controller.dispatch('refresh');
+  assert.equal(controller.snapshot().phase, 'running');
+  assert.equal(records.close, 0);
+  await controller.dispatch('ultrafast-on');
+  available = false;
+  await controller.dispatch('restart');
+  assert.deepEqual(records.ultrafast, [false, false]);
+  assert.equal(controller.snapshot().showUltrafast, false);
+  assert.match(controller.snapshot().ultrafastDetail, /未提供/);
   await controller.dispatch('quit');
 });
 
@@ -250,6 +284,7 @@ test('WPF window uses native controls, no browser/network assets, and confirms o
   assert.ok(script.includes("Send-Action 'restart'"));
   assert.ok(script.includes("Send-Action 'ultrafast-on'"));
   assert.ok(script.includes("Send-Action 'ultrafast-off'"));
+  assert.ok(script.includes('$s.ultrafastAvailable'));
   assert.ok(script.includes('$eventArgs.Cancel = $true'));
   assert.equal(script.includes('WebBrowser'), false);
   assert.equal(script.includes('https://'), false);
@@ -267,7 +302,8 @@ if (-not $markup) { throw 'Window markup missing' }
 $window=[Windows.Markup.XamlReader]::Parse($markup)
 if (-not $window.FindName('Primary') -or -not $window.FindName('Status')) { throw 'Required controls missing' }
 $ultrafast = $window.FindName('Ultrafast')
-if ($ultrafast -isnot [Windows.Controls.CheckBox] -or $ultrafast.IsChecked) { throw 'Ultrafast opt-in checkbox missing or checked' }
+if ($ultrafast -isnot [Windows.Controls.CheckBox] -or $ultrafast.IsChecked -or $ultrafast.IsEnabled) { throw 'Ultrafast opt-in checkbox missing or active before inspection' }
+if (-not $window.FindName('UltrafastDetail')) { throw 'Ultrafast reason label missing' }
 $window.Close()
 [Console]::Out.Write('WPF_OK')`;
   const file = win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');

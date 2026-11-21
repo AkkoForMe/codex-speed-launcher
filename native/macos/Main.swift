@@ -13,6 +13,8 @@ struct LauncherState: Decodable {
     let status: String
     let detail: String
     let showUltrafast: Bool
+    let ultrafastAvailable: Bool
+    let ultrafastDetail: String
     let busy: Bool
     let compatible: Bool
     let externalRunning: Bool
@@ -72,6 +74,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let refresh = NSButton(title: "刷新状态", target: nil, action: nil)
     let quit = NSButton(title: "退出启动器", target: nil, action: nil)
     let ultrafast = NSButton(checkboxWithTitle: "显示 Ultrafast", target: nil, action: nil)
+    let ultrafastDetail = NSTextField(wrappingLabelWithString: "正在检查当前模型的 Ultrafast 档位…")
     var backend: Process?
     var parentInput: Pipe?
     var privateOutput: Pipe?
@@ -126,7 +129,7 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func makeWindow() {
         testProgress?.mark("makeWindow.begin")
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 426, height: 486),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 426, height: 510),
                           styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "Codex Speed Launcher"
         window.isReleasedWhenClosed = false
@@ -176,6 +179,10 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         ultrafast.target = self; ultrafast.action = #selector(ultrafastClicked)
         ultrafast.isEnabled = false; ultrafast.toolTip = "下次启动或重启 Codex 时生效"
         stack.addArrangedSubview(ultrafast)
+        stack.setCustomSpacing(4, after: ultrafast)
+        ultrafastDetail.font = .systemFont(ofSize: 11); ultrafastDetail.textColor = .secondaryLabelColor
+        stack.addArrangedSubview(ultrafastDetail)
+        ultrafastDetail.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         for button in [primary, refresh, quit] {
             button.bezelStyle = .rounded; button.controlSize = .large
             button.font = .systemFont(ofSize: 13); button.target = self
@@ -288,10 +295,11 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         dot.layer?.backgroundColor = (value.phase == "running" ? NSColor.systemGreen : value.phase == "error" ? .systemOrange : value.busy ? .systemBlue : .systemGray).cgColor
         primary.title = value.managed ? "重启 Codex" : "启动 Codex"
         primary.isEnabled = !actionPending && !value.busy && value.compatible && (!value.externalRunning || value.managed)
-        refresh.isEnabled = !actionPending && !value.busy && !value.managed
+        refresh.isEnabled = !actionPending && !value.busy
         quit.isEnabled = !actionPending && !value.busy
         if !actionPending { ultrafast.state = value.showUltrafast ? .on : .off }
-        ultrafast.isEnabled = !actionPending && !value.busy && value.compatible
+        ultrafast.isEnabled = !actionPending && !value.busy && value.compatible && value.ultrafastAvailable
+        ultrafastDetail.stringValue = value.ultrafastDetail
         quit.title = "退出启动器"
         if value.closed {
             if selfTestReport != nil, !testComplete {
@@ -389,13 +397,20 @@ final class LauncherApp: NSObject, NSApplicationDelegate, NSWindowDelegate {
         switch testStep {
         case 0 where stats.inspections == 1:
             testProgress?.mark("test.ready")
-            guard primary.isEnabled, refresh.isEnabled, ultrafast.isEnabled, ultrafast.state == .off,
+            guard primary.isEnabled, refresh.isEnabled, !ultrafast.isEnabled, ultrafast.state == .off,
+                  ultrafastDetail.stringValue == "当前模型目录未提供 Ultrafast。",
                   value.model == "gpt-6.1-sol", version.stringValue == "Mock 1.0", window.isVisible else {
                 failTest("Native ready state did not render."); return
             }
-            testChecks.append("ready-state-and-window-visible"); testStep = 1; refresh.performClick(nil)
+            testChecks.append("ready-state-and-window-visible")
+            testChecks.append("ultrafast-disabled-with-reason"); testStep = 1; refresh.performClick(nil)
         case 1 where stats.inspections >= 2:
             testProgress?.mark("test.refresh")
+            guard ultrafast.isEnabled, ultrafast.state == .off,
+                  ultrafastDetail.stringValue == "目录已提供，勾选后启动或重启生效。" else {
+                failTest("Refreshing did not render the available Ultrafast tier."); return
+            }
+            testChecks.append("ultrafast-available-after-refresh")
             testChecks.append("refresh-button-read-only"); testStep = 2; ultrafast.performClick(nil)
         case 2 where value.showUltrafast:
             guard ultrafast.state == .on else { failTest("The native Ultrafast option did not reflect controller state."); return }

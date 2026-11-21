@@ -26,6 +26,12 @@ export const WINDOWS_261117_WEBPACK_PROFILE = Object.freeze({
   counts: Object.freeze({ 'api-key-service-tier-access': 12, 'api-key-request-tier-access': 14 }),
 });
 
+export const WINDOWS_261117_4957_WEBPACK_PROFILE = Object.freeze({
+  version: '26.1117.4957.0',
+  sha256: '8a437aad94098770c1bf5fd5385c204e162b62c6d7917f688741d74e05babe90',
+  counts: Object.freeze({ 'api-key-service-tier-access': 12, 'api-key-request-tier-access': 14 }),
+});
+
 // Read-only inspection of the official macOS 26.1111.21308 (build 27194)
 // archive found the same two semantic contracts with a different chunk layout.
 // Never reuse another platform's counts or accept an unknown archive hash.
@@ -38,6 +44,7 @@ export const MACOS_WEBPACK_PROFILE = Object.freeze({
 
 export const WEBPACK_PROFILES = Object.freeze([
   WEBPACK_PROFILE, WINDOWS_261111_WEBPACK_PROFILE, WINDOWS_261117_WEBPACK_PROFILE, MACOS_WEBPACK_PROFILE,
+  WINDOWS_261117_4957_WEBPACK_PROFILE,
 ]);
 
 const hookPrefix = String.raw`(?<prefix>(?<account>${ID})=\(0,${MEMBER}\)\((?<host>${ID})\),` +

@@ -27,7 +27,8 @@ $script:allowClose = $false
       </StackPanel>
     </Border>
     <StackPanel Grid.Row="2" Margin="0,19,0,0">
-      <CheckBox x:Name="Ultrafast" Content="显示 Ultrafast" FontSize="13" Margin="1,0,0,12" IsEnabled="False" ToolTip="下次启动或重启 Codex 时生效"/>
+      <CheckBox x:Name="Ultrafast" Content="显示 Ultrafast" FontSize="13" Margin="1,0,0,4" IsEnabled="False" ToolTip="下次启动或重启 Codex 时生效"/>
+      <TextBlock x:Name="UltrafastDetail" Text="正在检查当前模型的 Ultrafast 档位…" FontSize="11" Foreground="#637086" Margin="1,0,0,12" TextWrapping="Wrap"/>
       <Button x:Name="Primary" Content="启动 Codex" Background="#2563EB" Foreground="White" BorderBrush="#2563EB" FontWeight="SemiBold" IsEnabled="False"/>
       <Grid Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Button x:Name="Refresh" Content="刷新状态" IsEnabled="False"/><Button x:Name="Exit" Grid.Column="2" Content="退出启动器"/></Grid>
     </StackPanel>
@@ -41,7 +42,7 @@ $window = [Windows.Markup.XamlReader]::Load($reader)
 $status = $window.FindName('Status'); $dot = $window.FindName('StatusDot')
 $version = $window.FindName('Version'); $model = $window.FindName('Model'); $detail = $window.FindName('Detail')
 $primary = $window.FindName('Primary'); $refresh = $window.FindName('Refresh'); $exit = $window.FindName('Exit')
-$ultrafast = $window.FindName('Ultrafast')
+$ultrafast = $window.FindName('Ultrafast'); $ultrafastDetail = $window.FindName('UltrafastDetail')
 function Send-Action([string]$action) {
   try { $null = $client.UploadString($endpoint + '/action', 'POST', $action); $primary.IsEnabled = $false; $refresh.IsEnabled = $false; $exit.IsEnabled = $false; $ultrafast.IsEnabled = $false }
   catch { $detail.Text = '暂时无法连接启动器，请稍候。' }
@@ -75,10 +76,11 @@ $timer.Add_Tick({
     $dot.Fill = if ($s.phase -eq 'running') { '#22A06B' } elseif ($s.phase -eq 'error') { '#D97736' } elseif ($s.busy) { '#2563EB' } else { '#9AA4B2' }
     $primary.Content = if ($s.managed) { '重启 Codex' } else { '启动 Codex' }
     $primary.IsEnabled = -not $s.busy -and $s.compatible -and (-not $s.externalRunning -or $s.managed)
-    $refresh.IsEnabled = -not $s.busy -and -not $s.managed
+    $refresh.IsEnabled = -not $s.busy
     $exit.IsEnabled = -not $s.busy
     $ultrafast.IsChecked = [bool]$s.showUltrafast
-    $ultrafast.IsEnabled = -not $s.busy -and $s.compatible
+    $ultrafast.IsEnabled = -not $s.busy -and $s.compatible -and $s.ultrafastAvailable
+    $ultrafastDetail.Text = $s.ultrafastDetail
     if ($s.closed) { $script:allowClose = $true; $timer.Stop(); $window.Close() }
   } catch { $status.Text = '启动器连接已断开'; $detail.Text = '请先保存工作并退出 Codex，再重新打开启动器。'; $primary.IsEnabled = $false; $refresh.IsEnabled = $false; $ultrafast.IsEnabled = $false; $exit.IsEnabled = $true; $exit.Content = '关闭窗口'; $script:allowClose = $true }
 })

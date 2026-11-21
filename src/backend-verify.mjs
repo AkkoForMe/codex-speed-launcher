@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process';
 import { access, readFile } from 'node:fs/promises';
-import { isAbsolute, join, posix, win32 } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import metadata from '../package.json' with { type: 'json' };
+import { bundledCorePath } from './platform.mjs';
 
 const MODEL = 'gpt-6.1-sol';
 const MARKER = 'SPEED_TEST_OK';
@@ -159,10 +160,7 @@ export async function verifyBackend(app, {
   const source = await io.readFile(join(codexHome, 'config.toml'));
   signal?.throwIfAborted();
   const config = validateMockConfig(source, env);
-  const paths = app.platform === 'win32' ? win32 : posix;
-  const executable = app.platform === 'win32'
-    ? paths.join(paths.dirname(app.executable), 'resources', 'codex.exe')
-    : paths.join(app.root, 'Contents/Resources/codex');
+  const executable = bundledCorePath(app);
   await io.access(executable);
   signal?.throwIfAborted();
   const child = io.spawn(executable, ['app-server', '--stdio'], {

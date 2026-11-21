@@ -28,6 +28,12 @@ function system(overrides = {}) {
 }
 
 function pathsFor(platform) { return platform === 'win32' ? win32 : posix; }
+
+export function bundledCorePath(app) {
+  return app.platform === 'win32'
+    ? win32.join(win32.dirname(app.executable), 'resources', 'codex.exe')
+    : posix.join(app.root, 'Contents/Resources/codex');
+}
 function samePath(a, b, platform) {
   const paths = pathsFor(platform);
   const normalize = value => paths.resolve(value).replace(/[\\/]+$/, '');
