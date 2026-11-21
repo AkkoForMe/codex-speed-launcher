@@ -20,7 +20,7 @@ Mac 应用与 Windows 小窗展示相同的状态信息和按钮，界面使用�
 
 ## 验证范围
 
-v0.2.2 的 Apple 芯片版和 Intel 版分别在对应架构的 GitHub Actions 运行器上构建并验收。两份最终应用包均通过签名、文件清单、内置运行时检查和小窗模拟验收。小窗验收覆盖刷新、Ultrafast 默认关闭、勾选后启动、取消操作、退出超时、重启保留选择及正常退出。[构建与验收记录](https://github.com/AkkoForMe/codex-speed-launcher/actions/runs/44312186668)
+v0.2.4 的 Apple 芯片版和 Intel 版分别在对应架构的 GitHub Actions 运行器上构建。两份应用包均通过签名完整性、文件清单、内置运行时和小窗模拟检查。小窗验收覆盖 Ultrafast 置灰提示、刷新后可勾选、启动、重启和正常退出。[构建与验收记录](https://github.com/AkkoForMe/codex-speed-launcher/actions/runs/44866697341)
 
 官方 Codex 的原生速度菜单和出站档位仍待 Mac 实机核对。
 

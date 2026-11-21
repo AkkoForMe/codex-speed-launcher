@@ -7,6 +7,8 @@
 - Windows Codex `26.1117.4957.0` 核对归档指纹和 26 份适配资源。桌面与内置执行程序使用隔离配置，通过 Standard → Fast → Standard 验证。请求均发往本地模拟接口。
 - 最终 Windows EXE 在模型目录只提供 Fast 时将 Ultrafast 置灰并显示原因。目录加入 Ultrafast 后，点「刷新状态」即可勾选。小窗验证只查询模型目录。
 - Windows 的 157 项自动测试通过。隔离桌面已退出，测试配置已清理，已安装 Codex 归档校验值一致。
+- Apple 芯片和 Intel Mac 应用均通过最终包的签名完整性、文件清单、内置运行时和小窗模拟验收。两种架构都验证了 Ultrafast 置灰提示和刷新后可勾选。实际 Codex 菜单与出站档位待 Mac 实机核对。[构建与验收记录](https://github.com/AkkoForMe/codex-speed-launcher/actions/runs/44866697341)
+- v0.2.4 于 2026-11-21 作为预发布版公开。13 个附件的 SHA-256 已核对，Windows 下载件与本机验收的 EXE 一致。[发布页](https://github.com/AkkoForMe/codex-speed-launcher/releases/tag/v0.2.4) · [校验清单](https://github.com/AkkoForMe/codex-speed-launcher/releases/download/v0.2.4/SHA256SUMS.txt)
 
 ## 0.2.3 Windows Codex 26.1117.3838.0
 
